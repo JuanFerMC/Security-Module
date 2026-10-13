@@ -1,9 +1,11 @@
 package com.crediticio.auth.users.infrastructure.input;
 
 import com.crediticio.auth.shared.response.ApiError;
+import com.crediticio.auth.users.application.dto.ChangePasswordRequest;
 import com.crediticio.auth.users.application.dto.CreateUserRequest;
 import com.crediticio.auth.users.application.dto.ToggleStatusRequest;
 import com.crediticio.auth.users.application.dto.UserResponse;
+import com.crediticio.auth.users.ports.input.ChangePasswordInputPort;
 import com.crediticio.auth.users.ports.input.CreateUserInputPort;
 import com.crediticio.auth.users.ports.input.GetUserInputPort;
 import com.crediticio.auth.users.ports.input.ToggleUserStatusInputPort;
@@ -37,6 +39,7 @@ public class UsuarioController {
     private final CreateUserInputPort createUserInputPort;
     private final GetUserInputPort getUserInputPort;
     private final ToggleUserStatusInputPort toggleUserStatusInputPort;
+    private final ChangePasswordInputPort changePasswordInputPort;
 
     @PostMapping
     @Operation(
@@ -98,5 +101,29 @@ public class UsuarioController {
             @PathVariable Long id,
             @Valid @RequestBody ToggleStatusRequest request) {
         return ResponseEntity.ok(toggleUserStatusInputPort.toggleStatus(id, request));
+    }
+
+    @PatchMapping("/{id}/password")
+    @Operation(
+            summary = "Cambiar contrasena",
+            description = "ADMIN puede cambiar la contrasena de cualquier usuario (reset). ANALISTA solo la propia, verificando la contrasena actual."
+    )
+    @ApiResponse(responseCode = "204", description = "Contrasena actualizada")
+    @ApiResponse(responseCode = "401", description = "Contrasena actual incorrecta",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "403", description = "ANALISTA intento cambiar contrasena de otro usuario",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "404", description = "Usuario no encontrado",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> changePassword(
+            @PathVariable Long id,
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication) {
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        changePasswordInputPort.changePassword(id, request, authentication.getName(), isAdmin);
+        return ResponseEntity.noContent().build();
     }
 }

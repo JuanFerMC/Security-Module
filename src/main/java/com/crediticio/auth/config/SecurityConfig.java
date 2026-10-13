@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole("ADMIN")
                         // ADMIN o ANALISTA
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole("ADMIN", "ANALISTA")
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").hasAnyRole("ADMIN", "ANALISTA")
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole("ADMIN", "ANALISTA")
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole("ADMIN", "ANALISTA")

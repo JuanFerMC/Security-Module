@@ -1,6 +1,8 @@
 package com.crediticio.auth.config;
 
 import com.crediticio.auth.authentication.ports.output.TokenProviderPort;
+import com.crediticio.auth.users.domain.Usuario;
+import com.crediticio.auth.users.ports.output.UserRepositoryPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,12 +17,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final TokenProviderPort tokenProvider;
+    private final UserRepositoryPort userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -31,17 +35,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (token != null && tokenProvider.isTokenValid(token)) {
             String email = tokenProvider.getEmailFromToken(token);
-            String rol = tokenProvider.getRolFromToken(token);
 
-            List<SimpleGrantedAuthority> authorities = List.of(
-                    new SimpleGrantedAuthority("ROLE_" + rol)
-            );
+            Optional<Usuario> usuario = userRepository.findByEmail(email);
+            if (usuario.isPresent() && usuario.get().isActivo()) {
+                String rol = usuario.get().getRol().getNombre();
 
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(email, null, authorities);
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                List<SimpleGrantedAuthority> authorities = List.of(
+                        new SimpleGrantedAuthority("ROLE_" + rol)
+                );
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(email, null, authorities);
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
         }
 
         filterChain.doFilter(request, response);

@@ -21,6 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Dar permisos al Maven Wrapper
+        run: chmod +x mvnw
+
       - name: Ejecutar pruebas
         run: ./mvnw clean test --batch-mode --no-transfer-progress
 

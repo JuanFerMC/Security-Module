@@ -4,8 +4,10 @@ import com.crediticio.auth.authentication.ports.output.PasswordEncoderPort;
 import com.crediticio.auth.roles.domain.Rol;
 import com.crediticio.auth.roles.ports.output.RolRepositoryPort;
 import com.crediticio.auth.shared.exception.DuplicateEmailException;
+import com.crediticio.auth.shared.exception.InvalidCredentialsException;
 import com.crediticio.auth.shared.exception.RolNotFoundException;
 import com.crediticio.auth.shared.exception.UserNotFoundException;
+import com.crediticio.auth.users.application.dto.ChangePasswordRequest;
 import com.crediticio.auth.users.application.dto.CreateUserRequest;
 import com.crediticio.auth.users.application.dto.ToggleStatusRequest;
 import com.crediticio.auth.users.application.dto.UserResponse;
@@ -20,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -146,5 +150,71 @@ class UserServiceTest {
 
         assertThrows(UserNotFoundException.class,
                 () -> userService.toggleStatus(99L, new ToggleStatusRequest(false)));
+    }
+
+    // --- changePassword tests ---
+
+    @Test
+    void changePassword_asAdmin_resetsWithoutCurrentPassword() {
+        Usuario usuario = buildUsuario(1L, "Juan", "juan@test.com");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.encode("newPass123")).thenReturn("newHashed");
+        when(userRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.changePassword(1L, new ChangePasswordRequest(null, "newPass123"), "admin@test.com", true);
+
+        verify(passwordEncoder).encode("newPass123");
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(userRepository).save(any(Usuario.class));
+    }
+
+    @Test
+    void changePassword_asAnalista_ownPassword_success() {
+        Usuario usuario = buildUsuario(1L, "Juan", "juan@test.com");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("currentPass", "hashed")).thenReturn(true);
+        when(passwordEncoder.encode("newPass123")).thenReturn("newHashed");
+        when(userRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.changePassword(1L, new ChangePasswordRequest("currentPass", "newPass123"), "juan@test.com", false);
+
+        verify(passwordEncoder).matches("currentPass", "hashed");
+        verify(passwordEncoder).encode("newPass123");
+    }
+
+    @Test
+    void changePassword_asAnalista_otherUser_throws() {
+        Usuario usuario = buildUsuario(1L, "Juan", "juan@test.com");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(usuario));
+
+        assertThrows(AccessDeniedException.class,
+                () -> userService.changePassword(1L, new ChangePasswordRequest("pass", "newPass123"), "otro@test.com", false));
+    }
+
+    @Test
+    void changePassword_asAnalista_wrongCurrentPassword_throws() {
+        Usuario usuario = buildUsuario(1L, "Juan", "juan@test.com");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(passwordEncoder.matches("wrongCurrent", "hashed")).thenReturn(false);
+
+        assertThrows(InvalidCredentialsException.class,
+                () -> userService.changePassword(1L, new ChangePasswordRequest("wrongCurrent", "newPass123"), "juan@test.com", false));
+    }
+
+    @Test
+    void changePassword_asAnalista_noCurrentPassword_throws() {
+        Usuario usuario = buildUsuario(1L, "Juan", "juan@test.com");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(usuario));
+
+        assertThrows(InvalidCredentialsException.class,
+                () -> userService.changePassword(1L, new ChangePasswordRequest(null, "newPass123"), "juan@test.com", false));
+    }
+
+    @Test
+    void changePassword_userNotFound_throws() {
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class,
+                () -> userService.changePassword(99L, new ChangePasswordRequest("p", "newPass123"), "x@test.com", true));
     }
 }
