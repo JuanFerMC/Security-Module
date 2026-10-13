@@ -322,6 +322,86 @@ class AuthFlowIntegrationTest {
     }
 
     @Nested
+    class DeactivatedUserTests {
+
+        @Test
+        void deactivatedUser_tokenIsRejected_returns401() throws Exception {
+            String adminToken = loginAndGetToken("admin@test.com", "admin123");
+            String analistaToken = loginAndGetToken("analista@test.com", "analista123");
+            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+
+            mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"activo\":false}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.activo").value(false));
+
+            mockMvc.perform(get("/api/v1/auth/validate")
+                            .header("Authorization", "Bearer " + analistaToken))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void deactivatedUser_cannotRefreshToken_returns401() throws Exception {
+            String adminToken = loginAndGetToken("admin@test.com", "admin123");
+            String analistaToken = loginAndGetToken("analista@test.com", "analista123");
+            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+
+            mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"activo\":false}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v1/auth/refresh")
+                            .header("Authorization", "Bearer " + analistaToken))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void deactivatedUser_cannotLogin_returns401() throws Exception {
+            String adminToken = loginAndGetToken("admin@test.com", "admin123");
+            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+
+            mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"activo\":false}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"analista@test.com\",\"password\":\"analista123\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void reactivatedUser_canUseTokenAgain() throws Exception {
+            String adminToken = loginAndGetToken("admin@test.com", "admin123");
+            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+
+            mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"activo\":false}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"activo\":true}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"analista@test.com\",\"password\":\"analista123\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.token").isNotEmpty());
+        }
+    }
+
+    @Nested
     class TokenTests {
 
         @Test

@@ -214,8 +214,22 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 | `V102` | Indices en `id_rol` (FK) y `activo` |
 | `V103` | Tablas de auditoria Envers (`revinfo`, `usuarios_aud`, `roles_aud`) |
 | `V104` | Procedimiento almacenado `sp_resumen_usuarios_por_rol()` |
+| `V105` | Seed del usuario administrador inicial |
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
+
+### Usuario administrador inicial (seed)
+
+La migracion `V105` crea un usuario administrador para resolver el problema chicken-and-egg (el endpoint de crear usuarios requiere rol ADMIN, pero no existe ningun ADMIN inicial).
+
+| Campo | Valor |
+|---|---|
+| Nombre | Administrador |
+| Email | `admin@crediticio.com` |
+| Contrasena | `Admin2026!` |
+| Rol | ADMIN |
+
+**Importante:** cambiar esta contrasena inmediatamente despues del primer login usando `PATCH /api/v1/usuarios/{id}/password`.
 
 ### Procedimiento almacenado
 
@@ -251,6 +265,7 @@ Consulta no trivial con `LEFT JOIN`, `GROUP BY` y `FILTER` condicional.
 - **JWT:** firmado con HMAC-SHA256, clave via variable de entorno, expiracion configurable.
 - **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA en perfil y contrasena.
 - **Cambio de contrasena:** ANALISTA debe verificar contrasena actual; ADMIN puede hacer reset.
+- **Revocacion de acceso:** al desactivar un usuario, cualquier token existente queda inutilizado. El filtro JWT verifica el estado `activo` en BD en cada peticion.
 - **CORS:** origenes explicitos configurables, no `*`.
 - **Auditoria:** Hibernate Envers registra cada cambio con timestamp y usuario responsable.
 - **Logs:** JSON estructurado en produccion (compatible ELK/CloudWatch/Datadog).
@@ -279,10 +294,10 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 | `UserServiceTest` | Unitario | 14 | createUser, getAllUsers, getUserById, toggleStatus, changePassword |
 | `AuthServiceTest` | Unitario | 8 | login, refresh, validate (exito + errores) |
 | `JwtTokenProviderTest` | Unitario | 7 | generate, validate, expired, malformed, null, wrong secret |
-| `AuthFlowIntegrationTest` | Integracion | 21 | Login, CRUD, RBAC completa, cambio contrasena, tokens |
+| `AuthFlowIntegrationTest` | Integracion | 25 | Login, CRUD, RBAC, cambio contrasena, tokens, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 51 tests.**
+**Total: 55 tests.**
 
 ## Decisiones arquitectonicas (ADR)
 

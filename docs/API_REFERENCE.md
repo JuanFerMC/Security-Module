@@ -414,6 +414,33 @@ Todas las respuestas de error usan el mismo formato:
 
 ---
 
+## Usuario administrador inicial
+
+La base de datos incluye un usuario ADMIN creado por migracion (seed) para resolver el problema chicken-and-egg:
+
+| Campo | Valor |
+|---|---|
+| Email | `admin@crediticio.com` |
+| Contrasena | `Admin2026!` |
+| Rol | ADMIN |
+
+**Importante:** cambiar esta contrasena inmediatamente despues del primer login usando `PATCH /api/v1/usuarios/{id}/password`.
+
+---
+
+## Comportamiento con usuarios desactivados
+
+Cuando un ADMIN desactiva un usuario (`PATCH /usuarios/{id}/estado` con `activo: false`):
+
+- **Tokens existentes quedan invalidos inmediatamente.** El filtro JWT verifica el estado `activo` en BD en cada peticion.
+- **Login rechazado.** `POST /auth/login` retorna 401 con `INVALID_CREDENTIALS`.
+- **Refresh rechazado.** `POST /auth/refresh` retorna 401.
+- **Validate rechazado.** `GET /auth/validate` retorna 401.
+
+El frontend debe manejar un 401 inesperado como sesion terminada y redirigir al login.
+
+---
+
 ## Ejemplo de integracion con Axios
 
 ```javascript
