@@ -83,7 +83,10 @@ com.crediticio.auth/
 | `SPRING_DATASOURCE_USERNAME` | Usuario BD | `postgres` |
 | `SPRING_DATASOURCE_PASSWORD` | Contrasena BD | — **(obligatoria)** |
 | `JWT_SECRET` | Clave para firmar tokens (min. 256 bits = 32+ caracteres) | — **(obligatoria)** |
-| `JWT_EXPIRATION_MS` | Expiracion del token en ms | `3600000` (1 hora) |
+| `JWT_EXPIRATION_MS` | Vigencia del access token en ms. **Maximo 900000 (15 min)**; la app no arranca si se supera | `900000` (15 min) |
+| `JWT_REFRESH_EXPIRATION_DAYS` | Vigencia del refresh token en dias. **Maximo 7**; la app no arranca si se supera | `7` |
+| `JWT_ISSUER` | Emisor (`iss`) de los tokens. El Motor de Scoring debe validar el mismo | `crediticio-auth` |
+| `JWT_AUDIENCE` | Audiencia (`aud`) de los tokens. El Motor de Scoring debe validar la misma | `crediticio-scoring` |
 | `CORS_ALLOWED_ORIGINS` | Origenes permitidos (separados por coma) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` |
 | `INIT_ADMIN_EMAIL` | Correo del primer administrador (solo primer arranque) | — |
@@ -168,6 +171,9 @@ Lista de verificacion antes de desplegar:
 | Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
 | Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
 | Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
+| Arranque falla: "JWT_EXPIRATION_MS debe estar entre 1 y 900000" | Se configuro un access token de mas de 15 minutos | Usar 900000 o menos |
+| Arranque falla: "JWT_REFRESH_EXPIRATION_DAYS debe estar entre 1 y 7" | Refresh token de mas de 7 dias | Usar 7 o menos |
+| Frontend recibe 401 en `/auth/refresh` y no hay otra causa | El refresh token ya se uso (rotado), vencio o la sesion se revoco por reutilizacion | Es esperado: pedir login de nuevo. Guardar siempre el refresh token mas reciente |
 | Advertencia "No existe ningun ADMINISTRADOR_RIESGO" / nadie puede crear usuarios | Primer arranque sin `INIT_ADMIN_EMAIL`/`INIT_ADMIN_PASSWORD` (o V106 elimino el seed) | Definir las dos variables y reiniciar; ver "Primer administrador" |
 | Arranque falla con "INIT_ADMIN_PASSWORD no cumple la politica" | Contrasena inicial de menos de 12 caracteres | Usar 12 o mas |
 | `cannot find symbol ... getId()/getRol()` al compilar | Se compila con JDK 24+: Lombok 1.18.34 (el de Spring Boot 3.3.5) no lo soporta | Usar JDK 21. Con `JAVA_HOME` apuntando a JDK 21 |
@@ -205,7 +211,8 @@ Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer
 | Metodo | Ruta | Descripcion | Acceso |
 |---|---|---|---|
 | `POST` | `/login` | Login con email y contrasena → JWT + rol | Publico |
-| `POST` | `/refresh` | Renueva un token valido | ADMINISTRADOR_RIESGO, ANALISTA_CREDITO |
+| `POST` | `/refresh` | Canjea un refresh token por un nuevo access token y un nuevo refresh token (rotacion) | Publico (se autentica con el refresh token) |
+| `POST` | `/logout` | Invalida la sesion del refresh token (idempotente, 204) | Publico (se autentica con el refresh token) |
 | `GET` | `/validate` | Valida token y retorna identidad + rol | ADMINISTRADOR_RIESGO, ANALISTA_CREDITO |
 
 ### Usuarios (`/api/v1/usuarios`)
@@ -223,7 +230,8 @@ Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer
 | Endpoint | ADMINISTRADOR_RIESGO | ANALISTA_CREDITO | Publico |
 |---|---|---|---|
 | `POST /auth/login` | — | — | Si |
-| `POST /auth/refresh` | Si | Si | — |
+| `POST /auth/refresh` | — | — | Si (con refresh token) |
+| `POST /auth/logout` | — | — | Si (con refresh token) |
 | `GET /auth/validate` | Si | Si | — |
 | `POST /usuarios` | Si | — | — |
 | `GET /usuarios` | Si | — | — |
@@ -290,6 +298,7 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 | `V104` | Procedimiento almacenado `sp_resumen_usuarios_por_rol()` |
 | `V105` | Seed del usuario administrador inicial (retirado por V106) |
 | `V106` | HU08: roles `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO`, correo normalizado + indice unico `lower(email)`, columna `creado_por`, retiro del seed con credencial publica |
+| `V107` | HU09: tabla `refresh_tokens` (hash, familia de sesion, usado/revocado) |
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
 
@@ -340,26 +349,36 @@ Consulta no trivial con `LEFT JOIN`, `GROUP BY` y `FILTER` condicional.
 ## Flujo de autenticacion
 
 ```
-┌──────────┐     POST /auth/login      ┌──────────────┐
-│ Frontend │ ──────────────────────────→│ Auth Backend │
-│          │ ←────────────────────────── │  (este repo) │
-│          │     { token, rol }         └──────────────┘
-│          │
-│          │  Authorization: Bearer <token>
-│          │ ──────────────────────────→ Auth Backend | Motor de Scoring
-└──────────┘
+ Frontend                         Auth Backend (este repo)           Motor de Scoring
+    │  POST /auth/login                  │
+    │ ─────────────────────────────────→ │  access token (15 min) + refresh token (7 dias)
+    │ ←───────────────────────────────── │
+    │  Authorization: Bearer <access>    │
+    │ ─────────────────────────────────→ │ ─────────────────────────────→ valida iss/aud/firma
+    │  (access vencido)                  │
+    │  POST /auth/refresh {refreshToken} │  invalida el refresh usado y emite uno nuevo
+    │ ─────────────────────────────────→ │
+    │  POST /auth/logout {refreshToken}  │  invalida la sesion completa
+    │ ─────────────────────────────────→ │
 ```
 
-1. El frontend envia `POST /auth/login` → recibe el JWT.
-2. Incluye el JWT como `Authorization: Bearer <token>` en peticiones a ambos backends.
-3. El Motor de Scoring valida el token de forma autonoma (misma `JWT_SECRET`) o via `GET /auth/validate`.
+1. `POST /auth/login` devuelve un **access token** JWT (15 minutos) y un **refresh token** opaco (maximo 7 dias).
+2. El frontend envia `Authorization: Bearer <access token>` a ambos backends.
+3. Al vencer el access token, `POST /auth/refresh` con el refresh token entrega un par nuevo. **Cada refresh token sirve una sola vez**: el anterior queda invalidado en la misma operacion.
+4. Si se presenta un refresh token que ya fue rotado, se asume robo: **toda la sesion (familia) se revoca** y hay que volver a iniciar sesion.
+5. `POST /auth/logout` invalida la sesion. El refresh token se guarda solo como hash SHA-256; nunca en claro.
+6. El Motor de Scoring valida el access token de forma autonoma (misma `JWT_SECRET`, `JWT_ISSUER` y `JWT_AUDIENCE`) o via `GET /auth/validate`.
+
+Claims del access token: `sub` (id de usuario), `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`. El rol efectivo siempre se toma de la BD, no del claim.
 
 ## Seguridad
 
 ### Medidas implementadas
 
 - **Contrasenas:** hash BCrypt, nunca en texto plano. `password_hash` nunca se expone en respuestas.
-- **JWT:** firmado con HMAC-SHA256, clave via variable de entorno, expiracion configurable.
+- **JWT:** firmado con HMAC-SHA256, clave externa de 32+ caracteres (validada al arrancar), access token de 15 minutos con `iss`/`aud`, rechazo de tokens vencidos, alterados o de otro emisor/audiencia.
+- **Refresh tokens:** opacos, de un solo uso, guardados solo como hash, con rotacion atomica, deteccion de reutilizacion (revoca la sesion), logout y control de concurrencia.
+- **Login:** respuesta unica 401 ante cualquier fallo y comparacion de hash incluso si el usuario no existe (no revela existencia por mensaje ni por tiempo).
 - **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA_CREDITO en perfil y contrasena.
 - **Cambio de contrasena:** ANALISTA_CREDITO debe verificar contrasena actual; ADMINISTRADOR_RIESGO puede hacer reset.
 - **Revocacion de acceso:** al desactivar un usuario, cualquier token existente queda inutilizado. El filtro JWT verifica el estado `activo` en BD en cada peticion.
@@ -388,13 +407,14 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 
 | Clase | Tipo | Tests | Cobertura |
 |---|---|---|---|
-| `UserServiceTest` | Unitario | 14 | createUser, getAllUsers, getUserById, toggleStatus, changePassword |
-| `AuthServiceTest` | Unitario | 8 | login, refresh, validate (exito + errores) |
-| `JwtTokenProviderTest` | Unitario | 7 | generate, validate, expired, malformed, null, wrong secret |
-| `AuthFlowIntegrationTest` | Integracion | 25 | Login, CRUD, RBAC, cambio contrasena, tokens, usuarios desactivados |
+| `UserServiceTest` | Unitario | 18 | createUser (normalizacion, rol permitido, carrera), getAllUsers, getUserById, toggleStatus, changePassword |
+| `AuthServiceTest` | Unitario | 17 | login, refresh (rotacion, reutilizacion, vencido, inactivo, carrera), logout, validate |
+| `JwtTokenProviderTest` | Unitario | 14 | claims, iss/aud, vencido, alterado, refresh opaco/hash, limites de configuracion |
+| `AdminBootstrapRunnerTest` | Unitario | 4 | Primer administrador por variables de entorno |
+| `AuthFlowIntegrationTest` | Integracion | 44 | Login, CRUD, RBAC, cambio contrasena, refresh/logout, concurrencia, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 70 tests** (verificado con `mvnw clean test` en JDK 21).
+**Total: 98 tests** (verificado con `mvnw clean test` en JDK 21).
 
 ## Decisiones arquitectonicas (ADR)
 

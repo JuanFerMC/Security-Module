@@ -2,6 +2,18 @@
 
 Bitacora de ajustes necesarios para ejecutar el backend de autenticacion contra la base compartida `db_scoring`. Cada entrada indica sintoma, causa, solucion y como verificar. Todo ajuste de configuracion nuevo debe agregarse aqui.
 
+## 2026-10-14 — HU09: autenticacion con refresh tokens
+
+Cambios de configuracion/arranque que introduce HU09 (rama `feat/HU09-autenticar-usuario`).
+
+- **Variables nuevas:** `JWT_REFRESH_EXPIRATION_DAYS` (default 7, maximo 7), `JWT_ISSUER` (default `crediticio-auth`), `JWT_AUDIENCE` (default `crediticio-scoring`).
+- **Variable con cambio de significado:** `JWT_EXPIRATION_MS` pasa de default `3600000` (1 h) a `900000` (15 min) y **tiene maximo 900000**. Si un entorno la tiene definida con un valor mayor, **la aplicacion no arranca** (antes: 1 h). Revisar el entorno de despliegue.
+- **Validaciones de arranque nuevas:** `JWT_SECRET` de al menos 32 caracteres (antes solo se documentaba), vigencias dentro de los maximos, emisor y audiencia no vacios.
+- **Migracion V107:** tabla `refresh_tokens` (solo hash, familia de sesion, usado/revocado). Sin datos que migrar.
+- **Contrato de la API:** `POST /auth/refresh` ahora recibe `{refreshToken}` y devuelve dos tokens; nuevo `POST /auth/logout`. El `sub` del access token es el id de usuario (antes el correo) y se agregan `iss`/`aud`. **Los access tokens emitidos antes del despliegue dejan de ser validos.**
+- **Efecto en el ecosistema:** el Motor de Scoring (si valida el JWT por su cuenta) debe verificar `iss`/`aud` con los mismos valores y leer el correo del claim `email`. El frontend debe reemplazar ambos tokens en cada renovacion.
+- **Verificacion:** V100-V107 y el flujo completo (login, claims, hash en BD, rotacion, reutilizacion, 8 renovaciones simultaneas con 1 sola exitosa, logout, errores indistinguibles) comprobados en PostgreSQL temporal; `mvnw clean test` en JDK 21: 98 pruebas, 0 fallos.
+
 ## 2026-10-14 — HU08: roles, correo, contrasena y primer administrador
 
 Cambios de configuracion/arranque que introduce HU08 (rama `feat/HU08-gestionar-usuarios-roles`).

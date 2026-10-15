@@ -33,6 +33,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Públicos
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        // refresh y logout se autentican con el refresh token del cuerpo (el access token puede haber vencido)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Solo ADMINISTRADOR_RIESGO
@@ -41,7 +44,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole("ADMINISTRADOR_RIESGO")
                         // ADMINISTRADOR_RIESGO o ANALISTA_CREDITO
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
                         // Todo lo demás requiere autenticación

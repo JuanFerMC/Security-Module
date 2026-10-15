@@ -8,7 +8,9 @@ public interface AuthInputPort {
 
     LoginResponse login(LoginRequest request);
 
-    LoginResponse refresh(String token);
+    LoginResponse refresh(String refreshToken);
 
-    TokenValidationResponse validate(String token);
+    void logout(String refreshToken);
+
+    TokenValidationResponse validate(String accessToken);
 }

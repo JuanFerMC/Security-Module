@@ -6,6 +6,7 @@ import com.crediticio.auth.roles.infrastructure.output.RolJpaRepository;
 import com.crediticio.auth.users.infrastructure.output.UsuarioJpaEntity;
 import com.crediticio.auth.users.infrastructure.output.UsuarioJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -41,11 +42,15 @@ class AuthFlowIntegrationTest {
     @Autowired
     private PasswordEncoderPort passwordEncoder;
 
+    @Autowired
+    private com.crediticio.auth.authentication.infrastructure.output.RefreshTokenJpaRepository refreshTokenRepository;
+
     private RolJpaEntity adminRol;
     private RolJpaEntity analistaRol;
 
     @BeforeEach
     void setUp() {
+        refreshTokenRepository.deleteAll();
         usuarioRepository.deleteAll();
         rolRepository.deleteAll();
 
@@ -77,6 +82,25 @@ class AuthFlowIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         return objectMapper.readTree(response).get("token").asText();
+    }
+
+    private JsonNode login(String email, String password) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response);
+    }
+
+    private String loginAndGetRefresh(String email, String password) throws Exception {
+        return login(email, password).get("refreshToken").asText();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions refreshWith(String refreshToken) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + refreshToken + "\"}"));
     }
 
     @Nested
@@ -403,7 +427,7 @@ class AuthFlowIntegrationTest {
         @Test
         void deactivatedUser_cannotRefreshToken_returns401() throws Exception {
             String adminToken = loginAndGetToken("admin@test.com", "admin123");
-            String analistaToken = loginAndGetToken("analista@test.com", "analista123");
+            String analistaRefresh = loginAndGetRefresh("analista@test.com", "analista123");
             Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
 
             mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/estado")
@@ -413,7 +437,8 @@ class AuthFlowIntegrationTest {
                     .andExpect(status().isOk());
 
             mockMvc.perform(post("/api/v1/auth/refresh")
-                            .header("Authorization", "Bearer " + analistaToken))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"refreshToken\":\"" + analistaRefresh + "\"}"))
                     .andExpect(status().isUnauthorized());
         }
 
@@ -463,39 +488,210 @@ class AuthFlowIntegrationTest {
     class TokenTests {
 
         @Test
-        void refreshToken_returnsNewToken() throws Exception {
-            String token = loginAndGetToken("admin@test.com", "admin123");
+        void login_returnsAccessAndRefreshTokens() throws Exception {
+            JsonNode body = login("admin@test.com", "admin123");
 
-            mockMvc.perform(post("/api/v1/auth/refresh")
-                            .header("Authorization", "Bearer " + token))
+            org.junit.jupiter.api.Assertions.assertFalse(body.get("token").asText().isEmpty());
+            org.junit.jupiter.api.Assertions.assertFalse(body.get("refreshToken").asText().isEmpty());
+            org.junit.jupiter.api.Assertions.assertEquals("Bearer", body.get("tokenType").asText());
+            org.junit.jupiter.api.Assertions.assertEquals(900, body.get("expiresIn").asInt());
+        }
+
+        @Test
+        void refreshTokenIsStoredOnlyAsHash() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    refreshTokenRepository.findAll().stream().noneMatch(t -> refresh.equals(t.getTokenHash())));
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    refreshTokenRepository.findAll().stream().allMatch(t -> t.getTokenHash().length() == 64));
+        }
+
+        @Test
+        void refresh_returnsNewAccessAndRotatedRefresh() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+
+            String response = refreshWith(refresh)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.token").isNotEmpty())
-                    .andExpect(jsonPath("$.rol").value("ADMINISTRADOR_RIESGO"));
+                    .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                    .andExpect(jsonPath("$.rol").value("ADMINISTRADOR_RIESGO"))
+                    .andReturn().getResponse().getContentAsString();
+
+            String nuevo = objectMapper.readTree(response).get("refreshToken").asText();
+            org.junit.jupiter.api.Assertions.assertNotEquals(refresh, nuevo);
         }
 
         @Test
-        void refreshToken_unauthenticated_returns401() throws Exception {
-            mockMvc.perform(post("/api/v1/auth/refresh"))
-                    .andExpect(status().isUnauthorized());
-        }
+        void refresh_newAccessTokenWorks() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+            String response = refreshWith(refresh).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String access = objectMapper.readTree(response).get("token").asText();
 
-        @Test
-        void validateToken_returnsUserInfo() throws Exception {
-            String token = loginAndGetToken("analista@test.com", "analista123");
-
-            mockMvc.perform(get("/api/v1/auth/validate")
-                            .header("Authorization", "Bearer " + token))
+            mockMvc.perform(get("/api/v1/auth/validate").header("Authorization", "Bearer " + access))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.email").value("analista@test.com"))
-                    .andExpect(jsonPath("$.rol").value("ANALISTA_CREDITO"))
-                    .andExpect(jsonPath("$.userId").isNumber());
+                    .andExpect(jsonPath("$.email").value("admin@test.com"));
         }
 
         @Test
-        void anyEndpoint_withInvalidToken_returns401() throws Exception {
-            mockMvc.perform(get("/api/v1/usuarios")
-                            .header("Authorization", "Bearer invalid.token.here"))
+        void refresh_usedTokenIsRejected_andRevokesTheWholeSession() throws Exception {
+            String primero = loginAndGetRefresh("admin@test.com", "admin123");
+            String response = refreshWith(primero).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String segundo = objectMapper.readTree(response).get("refreshToken").asText();
+
+            // Reutilizar el token ya rotado: 401 y se invalida la familia completa (RF10)
+            refreshWith(primero).andExpect(status().isUnauthorized());
+
+            // El token nuevo de esa misma sesion tambien queda invalidado
+            refreshWith(segundo).andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void refresh_unknownToken_returns401() throws Exception {
+            refreshWith("token-que-no-existe").andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
+        }
+
+        @Test
+        void refresh_missingToken_returns400() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void refresh_expiredToken_returns401() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+            refreshTokenRepository.findAll().forEach(t -> {
+                t.setExpiraEn(java.time.LocalDateTime.now().minusMinutes(1));
+                refreshTokenRepository.save(t);
+            });
+
+            refreshWith(refresh).andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void refresh_doesNotRequireAccessToken() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+
+            // Sin encabezado Authorization (el access token pudo haber vencido)
+            refreshWith(refresh).andExpect(status().isOk());
+        }
+
+        @Test
+        void logout_invalidatesRefreshToken() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+
+            mockMvc.perform(post("/api/v1/auth/logout")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"refreshToken\":\"" + refresh + "\"}"))
+                    .andExpect(status().isNoContent());
+
+            refreshWith(refresh).andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void logout_isIdempotent_returns204() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/logout")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"refreshToken\":\"desconocido\"}"))
+                    .andExpect(status().isNoContent());
+        }
+
+        @Test
+        void refresh_concurrentRequestsWithSameToken_onlyOneSucceeds() throws Exception {
+            String refresh = loginAndGetRefresh("admin@test.com", "admin123");
+            int hilos = 6;
+            java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(hilos);
+            java.util.concurrent.CountDownLatch salida = new java.util.concurrent.CountDownLatch(1);
+            java.util.List<java.util.concurrent.Future<Integer>> resultados = new java.util.ArrayList<>();
+
+            for (int i = 0; i < hilos; i++) {
+                resultados.add(pool.submit(() -> {
+                    salida.await();
+                    return refreshWith(refresh).andReturn().getResponse().getStatus();
+                }));
+            }
+            salida.countDown();
+
+            int ok = 0;
+            int rechazados = 0;
+            for (java.util.concurrent.Future<Integer> f : resultados) {
+                int estado = f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                if (estado == 200) {
+                    ok++;
+                } else if (estado == 401) {
+                    rechazados++;
+                }
+            }
+            pool.shutdown();
+
+            org.junit.jupiter.api.Assertions.assertEquals(1, ok, "exactamente una renovacion debe tener exito");
+            org.junit.jupiter.api.Assertions.assertEquals(hilos - 1, rechazados);
+        }
+
+        @Test
+        void accessToken_withWrongIssuer_isRejected() throws Exception {
+            String forged = io.jsonwebtoken.Jwts.builder()
+                    .subject("1").issuer("otro-emisor")
+                    .audience().add("crediticio-scoring").and()
+                    .claim("rol", "ADMINISTRADOR_RIESGO")
+                    .issuedAt(new java.util.Date())
+                    .expiration(new java.util.Date(System.currentTimeMillis() + 60000))
+                    .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                            "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!"
+                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                    .compact();
+
+            mockMvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + forged))
                     .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void accessToken_roleClaimIsNotTrusted() throws Exception {
+            // Token valido de un analista pero con el claim rol adulterado a administrador:
+            // el rol efectivo sale de la BD, asi que no puede listar usuarios.
+            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+            String forged = io.jsonwebtoken.Jwts.builder()
+                    .subject(String.valueOf(analistaId)).issuer("crediticio-auth")
+                    .audience().add("crediticio-scoring").and()
+                    .claim("rol", "ADMINISTRADOR_RIESGO")
+                    .issuedAt(new java.util.Date())
+                    .expiration(new java.util.Date(System.currentTimeMillis() + 60000))
+                    .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                            "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!"
+                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                    .compact();
+
+            mockMvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + forged))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void validate_withoutToken_returns401() throws Exception {
+            mockMvc.perform(get("/api/v1/auth/validate"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void login_failuresDoNotRevealWhichCredentialFailed() throws Exception {
+            String desconocido = mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"noexiste@test.com\",\"password\":\"cualquiera\"}"))
+                    .andExpect(status().isUnauthorized())
+                    .andReturn().getResponse().getContentAsString();
+            String mala = mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"admin@test.com\",\"password\":\"incorrecta\"}"))
+                    .andExpect(status().isUnauthorized())
+                    .andReturn().getResponse().getContentAsString();
+
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    objectMapper.readTree(desconocido).get("message").asText(),
+                    objectMapper.readTree(mala).get("message").asText());
         }
     }
 }

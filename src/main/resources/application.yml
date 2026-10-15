@@ -30,7 +30,13 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:}
-    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+    # HU09 RNF02: access token de 15 minutos como maximo (900000 ms); refresh de 7 dias como maximo.
+    # La aplicacion no arranca si se superan estos limites.
+    access-expiration-ms: ${JWT_EXPIRATION_MS:900000}
+    refresh-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:7}
+    # Identificadores de emisor y audiencia (HU09 RF04/RF05). El Motor de Scoring debe validar los mismos.
+    issuer: ${JWT_ISSUER:crediticio-auth}
+    audience: ${JWT_AUDIENCE:crediticio-scoring}
   bootstrap:
     # Inicializacion del primer administrador (HU08 RF09/RF10). Solo actua si no existe ningun
     # ADMINISTRADOR_RIESGO. Nunca se versionan valores reales.

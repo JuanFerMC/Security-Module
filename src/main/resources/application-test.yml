@@ -16,4 +16,7 @@ spring:
 app:
   jwt:
     secret: test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!
-    expiration-ms: 3600000
+    access-expiration-ms: 900000
+    refresh-expiration-days: 7
+    issuer: crediticio-auth
+    audience: crediticio-scoring

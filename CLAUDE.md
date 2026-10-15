@@ -158,7 +158,7 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * La autenticación es **stateless**: no se usan sesiones del lado del servidor. El estado de autenticación se transporta íntegramente en el token JWT.
 * El token JWT contiene como mínimo: `sub` (email o id del usuario), `rol` (nombre del rol), `iat` (issued at) y `exp` (expiración).
 * La clave secreta para firmar los tokens se inyecta vía variable de entorno (`JWT_SECRET`), nunca se hardcodea en el código fuente.
-* El tiempo de expiración del token se configura vía variable de entorno (`JWT_EXPIRATION_MS`), con un valor por defecto razonable (por ejemplo, 3600000 ms = 1 hora).
+* La vigencia del access token se configura vía `JWT_EXPIRATION_MS` (por defecto y máximo 900000 ms = 15 minutos, HU09 RNF02); la del refresh token vía `JWT_REFRESH_EXPIRATION_DAYS` (por defecto y máximo 7). La aplicación no arranca con valores superiores.
 * La emisión y validación de tokens están aisladas detrás de un puerto de salida (`TokenProviderPort`), permitiendo cambiar la implementación sin afectar el dominio.
 
 ### Contraseñas
@@ -203,6 +203,9 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * **Primer administrador (RF09/RF10):** lo crea `AdminBootstrapRunner` al arrancar con `INIT_ADMIN_EMAIL`/`INIT_ADMIN_PASSWORD`, solo si no existe ningún `ADMINISTRADOR_RIESGO`. Prohibido sembrar credenciales en migraciones o exponer un endpoint público para ello.
 * **Correo:** siempre normalizado con `EmailNormalizer` (minúsculas, sin espacios laterales); unicidad por índice `lower(email)`.
 * **Contraseña:** 12 a 72 caracteres (HU08 RF04; 72 es el límite de BCrypt).
+* **Sesión (HU09):** access token JWT de 15 min (`sub` = id de usuario, `iss`, `aud`); refresh token opaco de un solo uso, de máx. 7 días, persistido solo como hash SHA-256 (`refresh_tokens`). Cada renovación lo rota; reutilizar uno ya rotado revoca toda la familia. La app no arranca con vigencias superiores ni con `JWT_SECRET` < 32 caracteres.
+* **Nunca** registrar ni devolver refresh tokens, hashes ni claves en logs, errores o respuestas (excepto el refresh token recién emitido en login/refresh).
+* **Autorización:** el rol efectivo se lee de la BD por el id del `sub`; no se confía en el claim `rol`.
 * `spring.jpa.hibernate.ddl-auto` no debe usarse para gestionar el esquema en producción. En el perfil `test` puede usarse `create-drop` sobre H2 con Flyway deshabilitado.
 
 ## 11. Modelo de datos: tablas de este backend
@@ -231,7 +234,8 @@ Los endpoints previstos son:
 
 ### Autenticación (`/api/v1/auth`)
 * `POST /api/v1/auth/login` — Autentica un usuario con email y contraseña; devuelve un token JWT con el rol.
-* `POST /api/v1/auth/refresh` — Renueva un token JWT válido antes de su expiración.
+* `POST /api/v1/auth/refresh` — Canjea un refresh token (cuerpo `{refreshToken}`) por un nuevo access token y un nuevo refresh token (rotación). Público: se autentica con el refresh token.
+* `POST /api/v1/auth/logout` — Invalida la sesión del refresh token (idempotente, 204). Público.
 * `GET /api/v1/auth/validate` — Valida un token JWT y devuelve la identidad y rol del usuario (consumido por el motor de scoring para verificar peticiones).
 
 ### Usuarios (`/api/v1/usuarios`)
@@ -250,7 +254,10 @@ No se deben implementar endpoints adicionales sin que la HU lo requiera.
 | `SPRING_DATASOURCE_USERNAME` | Usuario de la BD | `db_scoring_user` |
 | `SPRING_DATASOURCE_PASSWORD` | Contraseña de la BD | (secreto) |
 | `JWT_SECRET` | Clave secreta para firmar tokens | (mínimo 256 bits, secreto) |
-| `JWT_EXPIRATION_MS` | Tiempo de expiración del token en ms | `3600000` (1 hora) |
+| `JWT_EXPIRATION_MS` | Vigencia del access token en ms (máximo 900000 = 15 min; HU09 RNF02) | `900000` |
+| `JWT_REFRESH_EXPIRATION_DAYS` | Vigencia del refresh token en días (máximo 7) | `7` |
+| `JWT_ISSUER` | Emisor (`iss`) de los tokens | `crediticio-auth` |
+| `JWT_AUDIENCE` | Audiencia (`aud`) de los tokens | `crediticio-scoring` |
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos (frontend) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` (para no colisionar con el motor de scoring en `8080`) |
 | `INIT_ADMIN_EMAIL` | Correo del primer administrador (solo primer arranque; ver HU08 RF09/RF10) | (secreto operativo) |

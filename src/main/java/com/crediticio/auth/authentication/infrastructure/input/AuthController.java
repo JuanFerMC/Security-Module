@@ -2,6 +2,7 @@ package com.crediticio.auth.authentication.infrastructure.input;
 
 import com.crediticio.auth.authentication.application.dto.LoginRequest;
 import com.crediticio.auth.authentication.application.dto.LoginResponse;
+import com.crediticio.auth.authentication.application.dto.RefreshTokenRequest;
 import com.crediticio.auth.authentication.application.dto.TokenValidationResponse;
 import com.crediticio.auth.authentication.ports.input.AuthInputPort;
 import com.crediticio.auth.shared.response.ApiError;
@@ -23,18 +24,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Autenticacion", description = "Login, renovacion y validacion de tokens JWT. El endpoint login es publico; refresh y validate requieren token valido con rol ADMINISTRADOR_RIESGO o ANALISTA_CREDITO.")
+@Tag(name = "Autenticacion", description = "Login, renovacion con refresh token, cierre de sesion y validacion de tokens JWT. login, refresh y logout son publicos (se protegen con credenciales o refresh token); validate requiere un access token valido.")
 public class AuthController {
+
+    private static final String BEARER = "Bearer ";
 
     private final AuthInputPort authInputPort;
 
     @PostMapping("/login")
     @Operation(
             summary = "Iniciar sesion",
-            description = "Autentica con email y contrasena. Retorna JWT con rol. Endpoint publico."
+            description = "Autentica con email y contrasena. Retorna un access token JWT de 15 minutos y un refresh token de un solo uso (max. 7 dias). Endpoint publico."
     )
-    @ApiResponse(responseCode = "200", description = "Autenticacion exitosa, retorna token JWT")
-    @ApiResponse(responseCode = "401", description = "Credenciales invalidas o usuario inactivo",
+    @ApiResponse(responseCode = "200", description = "Autenticacion exitosa")
+    @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "401", description = "Credenciales invalidas (no se indica cual fallo)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authInputPort.login(request));
@@ -42,27 +47,41 @@ public class AuthController {
 
     @PostMapping("/refresh")
     @Operation(
-            summary = "Renovar token",
-            description = "Emite un nuevo JWT a partir de un token valido no expirado. Requiere ADMINISTRADOR_RIESGO o ANALISTA_CREDITO."
+            summary = "Renovar sesion",
+            description = "Canjea un refresh token valido por un nuevo access token y un nuevo refresh token. El refresh token usado queda invalidado. Si se reutiliza un token ya rotado se revoca toda la sesion."
     )
-    @ApiResponse(responseCode = "200", description = "Token renovado")
-    @ApiResponse(responseCode = "401", description = "Token invalido o expirado",
+    @ApiResponse(responseCode = "200", description = "Sesion renovada")
+    @ApiResponse(responseCode = "400", description = "refreshToken ausente",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<LoginResponse> refresh(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
-        return ResponseEntity.ok(authInputPort.refresh(token));
+    @ApiResponse(responseCode = "401", description = "Refresh token vencido, revocado, ya usado o invalido",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authInputPort.refresh(request.getRefreshToken()));
+    }
+
+    @PostMapping("/logout")
+    @Operation(
+            summary = "Cerrar sesion",
+            description = "Invalida la sesion asociada al refresh token. Es idempotente: siempre responde 204."
+    )
+    @ApiResponse(responseCode = "204", description = "Sesion cerrada")
+    @ApiResponse(responseCode = "400", description = "refreshToken ausente",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        authInputPort.logout(request.getRefreshToken());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/validate")
     @Operation(
             summary = "Validar token",
-            description = "Valida un JWT y retorna la identidad del usuario (id, email, rol). Consumido por el Motor de Scoring."
+            description = "Valida un access token JWT y retorna la identidad del usuario (id, email, rol). Consumido por el Motor de Scoring."
     )
     @ApiResponse(responseCode = "200", description = "Token valido, retorna identidad del usuario")
     @ApiResponse(responseCode = "401", description = "Token invalido o expirado",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<TokenValidationResponse> validate(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.replace("Bearer ", "");
+        String token = authHeader.startsWith(BEARER) ? authHeader.substring(BEARER.length()) : authHeader;
         return ResponseEntity.ok(authInputPort.validate(token));
     }
 }
