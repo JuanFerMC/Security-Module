@@ -144,3 +144,18 @@ Detalle de diseno en `docs/adr/ADR-005-hu09-sesion-refresh-token-rotacion.md`.
 | RNF06 Errores | ✅ | Mensajes uniformes |
 
 **Pendientes (fuera de la HU):** purga de tokens vencidos, limitacion de tasa en login/renovacion y revocar sesiones al cambiar la contrasena (hoy el refresh ya falla si el usuario esta inactivo).
+
+---
+
+## Actualizacion: revalidacion y correcciones
+
+La revalidacion (`docs/REVALIDACION_HU08_HU09.md`) encontro 4 desviaciones de HU08 RF13 / HU09 RF13 y RNF06 que MockMvc no detectaba. Ya estan corregidas:
+
+| Desviacion | Estado | Resultado |
+|---|---|---|
+| JSON mal formado o tipo invalido respondia 401 en servidor real | ✅ | 400 `MALFORMED_REQUEST` / `INVALID_PARAMETER` |
+| 401/403 con codificacion ISO-8859-1 y acentos corruptos | ✅ | `charset=UTF-8` |
+| `idRol` inexistente respondia 404 | ✅ | 400 `ROL_NOT_FOUND` |
+| Refresh token vacio o muy largo respondia 400 | ✅ | 401 `INVALID_CREDENTIALS` |
+
+Con estas correcciones **HU08 RF13 y HU09 RF13/RNF06 quedan en ✅**. Sigue pendiente solo lo fuera de las HU (purga de tokens, limitacion de tasa, revocar sesiones al cambiar la contrasena) y la salvedad H5 (credencial en el historial de V105).

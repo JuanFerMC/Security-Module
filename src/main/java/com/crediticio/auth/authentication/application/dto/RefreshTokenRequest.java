@@ -1,8 +1,6 @@
 package com.crediticio.auth.authentication.application.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,8 +13,8 @@ import lombok.Setter;
 @Schema(description = "Refresh token para renovar la sesion o cerrarla")
 public class RefreshTokenRequest {
 
-    @NotBlank
-    @Size(max = 512)
+    // Sin validaciones de bean a proposito: un token ausente, vacio o demasiado largo es un token
+    // invalido y debe responder 401 (HU09 RF13), no 400.
     @Schema(description = "Refresh token recibido en el login o en la ultima renovacion", example = "q3k2...")
     private String refreshToken;
 }

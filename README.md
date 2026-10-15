@@ -171,6 +171,7 @@ Lista de verificacion antes de desplegar:
 | Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
 | Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
 | Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
+| Peticion con JSON invalido responde 401 en vez de 400 | `/error` protegido por Spring Security (error dispatch del contenedor) | Ya resuelto: `SecurityConfig` permite `/error`. Verificar con servidor real, no solo MockMvc |
 | Arranque falla: "JWT_EXPIRATION_MS debe estar entre 1 y 900000" | Se configuro un access token de mas de 15 minutos | Usar 900000 o menos |
 | Arranque falla: "JWT_REFRESH_EXPIRATION_DAYS debe estar entre 1 y 7" | Refresh token de mas de 7 dias | Usar 7 o menos |
 | Frontend recibe 401 en `/auth/refresh` y no hay otra causa | El refresh token ya se uso (rotado), vencio o la sesion se revoco por reutilizacion | Es esperado: pedir login de nuevo. Guardar siempre el refresh token mas reciente |
@@ -376,7 +377,7 @@ Claims del access token: `sub` (id de usuario), `email`, `rol`, `iss`, `aud`, `i
 ### Medidas implementadas
 
 - **Contrasenas:** hash BCrypt, nunca en texto plano. `password_hash` nunca se expone en respuestas.
-- **JWT:** firmado con HMAC-SHA256, clave externa de 32+ caracteres (validada al arrancar), access token de 15 minutos con `iss`/`aud`, rechazo de tokens vencidos, alterados o de otro emisor/audiencia.
+- **JWT:** firmado con HMAC-SHA (HS256/HS384/HS512 segun la longitud del secreto), clave externa de 32+ caracteres (validada al arrancar), access token de 15 minutos con `iss`/`aud`, rechazo de tokens vencidos, alterados o de otro emisor/audiencia.
 - **Refresh tokens:** opacos, de un solo uso, guardados solo como hash, con rotacion atomica, deteccion de reutilizacion (revoca la sesion), logout y control de concurrencia.
 - **Login:** respuesta unica 401 ante cualquier fallo y comparacion de hash incluso si el usuario no existe (no revela existencia por mensaje ni por tiempo).
 - **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA_CREDITO en perfil y contrasena.
@@ -408,13 +409,14 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 | Clase | Tipo | Tests | Cobertura |
 |---|---|---|---|
 | `UserServiceTest` | Unitario | 18 | createUser (normalizacion, rol permitido, carrera), getAllUsers, getUserById, toggleStatus, changePassword |
-| `AuthServiceTest` | Unitario | 17 | login, refresh (rotacion, reutilizacion, vencido, inactivo, carrera), logout, validate |
+| `AuthServiceTest` | Unitario | 19 | login, refresh (rotacion, reutilizacion, vencido, inactivo, carrera), logout, validate |
 | `JwtTokenProviderTest` | Unitario | 14 | claims, iss/aud, vencido, alterado, refresh opaco/hash, limites de configuracion |
 | `AdminBootstrapRunnerTest` | Unitario | 4 | Primer administrador por variables de entorno |
+| `HttpErrorHandlingIntegrationTest` | Integracion (servidor HTTP real) | 12 | Errores de entrada 400 (JSON mal formado, tipos), UTF-8 en 401/403, `idRol` inexistente, refresh invalido 401 |
 | `AuthFlowIntegrationTest` | Integracion | 44 | Login, CRUD, RBAC, cambio contrasena, refresh/logout, concurrencia, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 98 tests** (verificado con `mvnw clean test` en JDK 21).
+**Total: 112 tests** (verificado con `mvnw clean test` en JDK 21).
 
 ## Decisiones arquitectonicas (ADR)
 

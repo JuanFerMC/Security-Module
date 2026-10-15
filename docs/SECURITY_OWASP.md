@@ -31,7 +31,7 @@ Este documento analiza como el backend aborda cada categoria del OWASP Top 10 (2
 **Medidas implementadas:**
 - Contrasenas almacenadas exclusivamente como hash BCrypt (`BcryptPasswordEncoderAdapter`), nunca en texto plano.
 - BCrypt aislado detras de `PasswordEncoderPort`, permitiendo migrar a Argon2 sin cambiar la logica de negocio.
-- JWT firmado con HMAC-SHA256 (`jjwt`). Clave secreta inyectada via variable de entorno `JWT_SECRET`, nunca hardcodeada.
+- JWT firmado con HMAC-SHA (`jjwt` elige HS256/HS384/HS512 segun la longitud del secreto). Clave secreta inyectada via variable de entorno `JWT_SECRET`, nunca hardcodeada.
 - `password_hash` nunca se expone en DTOs de salida (`UserResponse` no incluye ese campo).
 
 **Mitigaciones adicionales recomendadas:**

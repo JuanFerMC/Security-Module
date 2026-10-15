@@ -51,9 +51,9 @@ public class AuthController {
             description = "Canjea un refresh token valido por un nuevo access token y un nuevo refresh token. El refresh token usado queda invalidado. Si se reutiliza un token ya rotado se revoca toda la sesion."
     )
     @ApiResponse(responseCode = "200", description = "Sesion renovada")
-    @ApiResponse(responseCode = "400", description = "refreshToken ausente",
+    @ApiResponse(responseCode = "400", description = "Cuerpo que no es JSON valido",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "401", description = "Refresh token vencido, revocado, ya usado o invalido",
+    @ApiResponse(responseCode = "401", description = "Refresh token ausente, vacio, vencido, revocado, ya usado o invalido",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(authInputPort.refresh(request.getRefreshToken()));
@@ -65,7 +65,7 @@ public class AuthController {
             description = "Invalida la sesion asociada al refresh token. Es idempotente: siempre responde 204."
     )
     @ApiResponse(responseCode = "204", description = "Sesion cerrada")
-    @ApiResponse(responseCode = "400", description = "refreshToken ausente",
+    @ApiResponse(responseCode = "400", description = "Cuerpo que no es JSON valido",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
         authInputPort.logout(request.getRefreshToken());

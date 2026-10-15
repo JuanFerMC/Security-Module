@@ -163,6 +163,20 @@ class AuthServiceTest {
     }
 
     @Test
+    void refresh_oversizedToken_throwsWithoutLookup() {
+        String largo = "a".repeat(600);
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.refresh(largo));
+        verify(refreshTokenRepository, never()).findByTokenHash(anyString());
+    }
+
+    @Test
+    void logout_oversizedToken_isIdempotentWithoutLookup() {
+        assertDoesNotThrow(() -> authService.logout("a".repeat(600)));
+        verify(refreshTokenRepository, never()).findByTokenHash(anyString());
+    }
+
+    @Test
     void refresh_blankToken_throws() {
         assertThrows(InvalidCredentialsException.class, () -> authService.refresh("  "));
         assertThrows(InvalidCredentialsException.class, () -> authService.refresh(null));
