@@ -34,9 +34,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (token != null && tokenProvider.isTokenValid(token)) {
-            String email = tokenProvider.getEmailFromToken(token);
+            Long userId = tokenProvider.getUserIdFromToken(token);
 
-            Optional<Usuario> usuario = userRepository.findByEmail(email);
+            // Identidad y rol se toman de la BD, nunca de claims del token (HU09 RF15).
+            Optional<Usuario> usuario = userRepository.findById(userId);
             if (usuario.isPresent() && usuario.get().isActivo()) {
                 String rol = usuario.get().getRol().getNombre();
 
@@ -45,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 );
 
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(email, null, authorities);
+                        new UsernamePasswordAuthenticationToken(usuario.get().getEmail(), null, authorities);
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
