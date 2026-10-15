@@ -12,6 +12,7 @@ import com.crediticio.auth.shared.EmailNormalizer;
 import com.crediticio.auth.shared.exception.InvalidCredentialsException;
 import com.crediticio.auth.users.domain.Usuario;
 import com.crediticio.auth.users.ports.output.UserRepositoryPort;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,10 +22,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Autenticacion y gestion de sesion (HU09). Ningun log ni respuesta incluye contrasenas, tokens
- * ni hashes (RNF04/RNF05).
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -35,6 +33,7 @@ public class AuthService implements AuthInputPort {
     private static final String CREDENCIALES_INVALIDAS = "Credenciales inválidas";
     private static final String REFRESH_INVALIDO = "Refresh token inválido";
     private static final String TOKEN_INVALIDO = "Token inválido";
+    private static final int MAX_REFRESH_LENGTH = 512;
 
     private final UserRepositoryPort userRepository;
     private final PasswordEncoderPort passwordEncoder;
@@ -43,6 +42,12 @@ public class AuthService implements AuthInputPort {
 
     /** Hash de relleno para igualar el tiempo de respuesta cuando el usuario no existe (RF02). */
     private volatile String dummyHash;
+
+
+    @PostConstruct
+    void initDummyHash() {
+        dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
+    }
 
     @Override
     @Transactional
@@ -67,10 +72,7 @@ public class AuthService implements AuthInputPort {
         return response;
     }
 
-    /**
-     * Renueva la sesion rotando el refresh token (RF08/RF09). Las comprobaciones que revocan la familia
-     * no deben deshacerse al lanzar la excepcion, por eso {@code noRollbackFor}.
-     */
+
     @Override
     @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public LoginResponse refresh(String refreshToken) {
@@ -82,7 +84,7 @@ public class AuthService implements AuthInputPort {
 
         LocalDateTime ahora = LocalDateTime.now();
 
-        // RF10: un token ya rotado o revocado que reaparece indica robo o reutilizacion.
+
         if (actual.getUsadoEn() != null || actual.getRevocadoEn() != null) {
             refreshTokenRepository.revocarFamilia(actual.getFamiliaId(), ahora);
             log.warn("Reutilizacion de refresh token detectada: userId={}, familia={}; sesion revocada",
@@ -90,7 +92,7 @@ public class AuthService implements AuthInputPort {
             throw new InvalidCredentialsException(REFRESH_INVALIDO);
         }
 
-        // RF13: vencido
+
         if (!actual.getExpiraEn().isAfter(ahora)) {
             log.warn("Renovacion rechazada: refresh token vencido, userId={}", actual.getUsuarioId());
             throw new InvalidCredentialsException(REFRESH_INVALIDO);
@@ -103,7 +105,7 @@ public class AuthService implements AuthInputPort {
             throw new InvalidCredentialsException(REFRESH_INVALIDO);
         }
 
-        // RF12: canje atomico. Si otra peticion lo canjeo primero, esta pierde y se trata como reutilizacion.
+
         if (!refreshTokenRepository.marcarUsado(actual.getId(), ahora)) {
             refreshTokenRepository.revocarFamilia(actual.getFamiliaId(), ahora);
             log.warn("Renovacion concurrente con el mismo refresh token: userId={}, familia={}; sesion revocada",
@@ -119,7 +121,7 @@ public class AuthService implements AuthInputPort {
     @Override
     @Transactional
     public void logout(String refreshToken) {
-        // Idempotente: un token desconocido no se distingue de uno ya cerrado (no filtra informacion).
+
         buscarRefresh(refreshToken).ifPresent(token -> {
             refreshTokenRepository.revocarFamilia(token.getFamiliaId(), LocalDateTime.now());
             log.info("Sesion cerrada: userId={}, familia={}", token.getUsuarioId(), token.getFamiliaId());
@@ -145,7 +147,8 @@ public class AuthService implements AuthInputPort {
     }
 
     private Optional<RefreshToken> buscarRefresh(String refreshToken) {
-        if (refreshToken == null || refreshToken.isBlank()) {
+        // Ausente, vacio o de longitud imposible: es un token invalido (no se consulta ni se hashea).
+        if (refreshToken == null || refreshToken.isBlank() || refreshToken.length() > MAX_REFRESH_LENGTH) {
             return Optional.empty();
         }
         return refreshTokenRepository.findByTokenHash(tokenProvider.hashRefreshToken(refreshToken));

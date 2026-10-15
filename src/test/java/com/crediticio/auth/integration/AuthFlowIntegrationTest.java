@@ -555,11 +555,11 @@ class AuthFlowIntegrationTest {
         }
 
         @Test
-        void refresh_missingToken_returns400() throws Exception {
+        void refresh_missingToken_returns401() throws Exception {
             mockMvc.perform(post("/api/v1/auth/refresh")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isUnauthorized());
         }
 
         @Test
