@@ -195,6 +195,10 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * Para evitar colisiones de versionamiento con las migraciones del motor de scoring, las migraciones de este backend usan un **prefijo diferenciado**: `V100__`, `V101__`, `V102__`, etc. (las del motor de scoring usan `V1__` a `V99__`).
 * Todo cambio de esquema se implementa mediante una nueva migración de Flyway versionada en `src/main/resources/db/migration`, siguiendo la convención `V{version}__{descripcion}.sql`.
 * Nunca modificar una migración de Flyway ya aplicada/versionada previamente.
+* La BD es compartida, por lo que `application.yml` define `spring.flyway.ignore-migration-patterns: "*:missing"`: sin ello Flyway falla al encontrar V1-V99 aplicadas por el motor de scoring. No quitarlo.
+* Los ids `SERIAL` (INTEGER) de las tablas se mapean a `Long` con `@JdbcTypeCode(SqlTypes.INTEGER)` en las entidades JPA; omitirlo rompe `ddl-auto: validate` (espera BIGINT).
+* Compilar y ejecutar con **JDK 21**: con JDK 24 Lombok 1.18.34 no genera getters/setters. Ante `ClassFormatError` en `target/`, ejecutar `clean`.
+* Todo ajuste de configuración/arranque se registra en `docs/CAMBIOS_CONFIGURACION.md`.
 * `spring.jpa.hibernate.ddl-auto` no debe usarse para gestionar el esquema en producción. En el perfil `test` puede usarse `create-drop` sobre H2 con Flyway deshabilitado.
 
 ## 11. Modelo de datos: tablas de este backend

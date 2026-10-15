@@ -165,6 +165,12 @@ Lista de verificacion antes de desplegar:
 | Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
 | Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
 | Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
+| `cannot find symbol ... getId()/getRol()` al compilar | Se compila con JDK 24+: Lombok 1.18.34 (el de Spring Boot 3.3.5) no lo soporta | Usar JDK 21. Con `JAVA_HOME` apuntando a JDK 21 |
+| `ClassFormatError: Invalid method Code length 0` al arrancar | Clases en `target/` corruptas por una compilacion previa fallida o incremental con Lombok | `.\mvnw.cmd clean spring-boot:run` |
+| `Validate failed: Detected applied migration not resolved locally: 1` | La BD compartida tiene migraciones V1-V99 del Motor de Scoring | Ya resuelto en `application.yml` (`ignore-migration-patterns: "*:missing"`). Si aparece, actualizar la rama |
+| `wrong column type encountered in column [id_rol] ... found [serial], expecting [bigint]` | Entidad `Long` vs columna `SERIAL` (INTEGER) | Ya resuelto con `@JdbcTypeCode(SqlTypes.INTEGER)` en `RolJpaEntity` y `UsuarioJpaEntity` |
+
+> Historial detallado de estos ajustes de arranque: [`docs/CAMBIOS_CONFIGURACION.md`](docs/CAMBIOS_CONFIGURACION.md).
 
 ### Ejecucion con Docker
 
@@ -281,6 +287,10 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
 
+Como ambos backends comparten `flyway_schema_history`, este backend tiene configurado `spring.flyway.ignore-migration-patterns: "*:missing"` para no fallar la validacion por las migraciones V1-V99 que aplico el Motor de Scoring y que no existen en este repositorio.
+
+Los ids (`id_rol`, `id_usuario`) son `SERIAL` (INTEGER) en BD y `Long` en Java; las entidades JPA usan `@JdbcTypeCode(SqlTypes.INTEGER)` para que `ddl-auto: validate` los acepte. No cambiar el tipo de la columna sin una nueva migracion.
+
 ### Usuario administrador inicial (seed)
 
 La migracion `V105` crea un usuario administrador para resolver el problema chicken-and-egg (el endpoint de crear usuarios requiere rol ADMIN, pero no existe ningun ADMIN inicial).
@@ -360,7 +370,7 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 | `AuthFlowIntegrationTest` | Integracion | 25 | Login, CRUD, RBAC, cambio contrasena, tokens, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 55 tests.**
+**Total: 58 tests** (verificado con `mvnw clean test` en JDK 21).
 
 ## Decisiones arquitectonicas (ADR)
 

@@ -49,3 +49,9 @@ Cada backend gestiona exclusivamente sus propias tablas. Las migraciones de Auth
 - No se puede escalar la base de datos de forma independiente por backend.
 - Riesgo de colisión si un backend excede su rango de versiones asignado (mitigable con convención y revisión en PR).
 - Migrar a base de datos por servicio en el futuro requiere partir datos y sincronizar — coste de migración significativo.
+
+## Actualizacion 2026-10-14: validacion de Flyway en BD compartida
+
+Al arrancar este backend contra una `db_scoring` que ya tenia las migraciones V1-V5 del Motor de Scoring, Flyway fallaba con `Detected applied migration not resolved locally`, porque por defecto exige que toda migracion aplicada exista en el classpath.
+
+Decision: configurar `spring.flyway.ignore-migration-patterns: "*:missing"` en `application.yml`. Las migraciones ajenas se ignoran; las propias (V100+) siguen validandose (checksum, orden). El Motor de Scoring debe aplicar la misma configuracion en su lado (ignorar `*:missing` para V100+).
