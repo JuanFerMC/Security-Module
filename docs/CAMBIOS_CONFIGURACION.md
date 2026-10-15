@@ -2,6 +2,16 @@
 
 Bitacora de ajustes necesarios para ejecutar el backend de autenticacion contra la base compartida `db_scoring`. Cada entrada indica sintoma, causa, solucion y como verificar. Todo ajuste de configuracion nuevo debe agregarse aqui.
 
+## 2026-10-14 — HU08: roles, correo, contrasena y primer administrador
+
+Cambios de configuracion/arranque que introduce HU08 (rama `feat/HU08-gestionar-usuarios-roles`).
+
+- **Nuevas variables:** `INIT_ADMIN_EMAIL`, `INIT_ADMIN_PASSWORD`, `INIT_ADMIN_NOMBRE` (primer arranque). Ver README y `.env.example`.
+- **Migracion V106:** renombra roles a `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO`, normaliza correos, crea el indice unico `uq_usuarios_email_lower`, agrega `creado_por` (tablas `usuarios` y `usuarios_aud`) y **elimina el usuario semilla `admin@crediticio.com` solo si conserva la contrasena publica original**.
+- **Efecto en entornos existentes:** tras aplicar V106 puede no quedar ningun administrador. Antes de arrancar con la nueva version definir `INIT_ADMIN_EMAIL` e `INIT_ADMIN_PASSWORD`.
+- **Efecto en el ecosistema:** el rol que viaja en el JWT y en `/auth/validate` cambia de `ADMIN`/`ANALISTA` a `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO`. Motor de Scoring y frontend deben usar estos nombres al integrarse.
+- **Verificacion:** migraciones V100-V106 y flujo (login con otra capitalizacion, creacion, `creado_por`, primer administrador) comprobados en una base PostgreSQL temporal; `mvnw clean test` en JDK 21: 70 pruebas, 0 fallos.
+
 ## 2026-10-14 — Primer arranque local en Windows
 
 Entorno: Windows 10, PostgreSQL 16 local con `db_scoring` existente y migraciones V1-V5 del Motor de Scoring ya aplicadas.

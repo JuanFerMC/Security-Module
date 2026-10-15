@@ -90,3 +90,27 @@ Conclusion: ningun otro componente depende hoy de los nombres, por lo que adopta
 7. Documentacion en el mismo cambio: matriz de trazabilidad, `API_REFERENCE.md`, ADR de sesiones y refresh tokens, procedimiento del primer admin y bitacora `CAMBIOS_CONFIGURACION.md`.
 
 **Impacto externo:** cambiar duracion del token, roles o flujo de refresh afecta al frontend y al Motor de Scoring cuando integren autenticacion.
+
+---
+
+## Actualizacion: HU08 implementada (rama `feat/HU08-gestionar-usuarios-roles`)
+
+Decisiones tomadas: roles de la HU (`ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`) y 409 ante correo duplicado. Primer administrador por variables de entorno (ver `docs/adr/ADR-004-hu08-roles-correo-primer-administrador.md`).
+
+| RF/RNF | Estado | Como se resolvio |
+|---|---|---|
+| RF02 Normalizar correo | ✅ | `EmailNormalizer` (minusculas, sin espacios laterales) en alta y login; V106 normaliza los existentes |
+| RF03 Unicidad | ✅ | Indice unico `lower(email)` (V106) + captura de la violacion en carreras |
+| RF04 Contrasena >= 12 | ✅ | `@Size(min = 12, max = 72)` en alta y cambio de contrasena |
+| RF06 Roles de la HU | ✅ | V106 + `RolSistema`; el servicio rechaza otros roles con 400 `ROL_NOT_ALLOWED` |
+| RF08 Sin escalada | ✅ | Lista blanca de roles en servicio; endpoint solo `ADMINISTRADOR_RIESGO` |
+| RF09 Primer admin controlado | ✅ | `AdminBootstrapRunner` con `INIT_ADMIN_*`, fuera de la API |
+| RF10 Inicializacion deshabilitada | ✅ | Se omite si ya existe un `ADMINISTRADOR_RIESGO`; seed V105 retirado por V106 |
+| RF11 Sin usuario parcial | ✅ | Verificacion previa + `DataIntegrityViolationException` -> 409 |
+| RF13 Codigos | ✅ | 400 / 401 / 403 (+ 409 duplicado, decision tomada) |
+| RNF04 Confidencialidad | ✅ | Los nuevos logs no incluyen contrasenas ni hashes |
+| RNF05 Trazabilidad | ✅ | `creado_por` + log de creacion con actor |
+| RNF06 Secretos externos | ✅ | Sin credenciales en migraciones nuevas ni en documentacion |
+
+**Pendiente de HU08:** nada funcional. Queda decidir si se documenta en un contrato versionado para Motor de Scoring/frontend el cambio de nombres de rol.
+**Sin tocar (HU09):** todo lo marcado ❌/🟡 de la seccion HU09 sigue pendiente.

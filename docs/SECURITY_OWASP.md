@@ -13,8 +13,8 @@ Este documento analiza como el backend aborda cada categoria del OWASP Top 10 (2
 **Riesgo:** Un usuario accede a recursos o funciones que no le corresponden.
 
 **Medidas implementadas:**
-- RBAC por endpoint en `SecurityConfig.java` con Spring Security (`hasRole("ADMIN")`, `hasAnyRole("ADMIN", "ANALISTA")`).
-- Regla "solo propio" en `GET /usuarios/{id}`: el ANALISTA solo puede consultar su propio perfil; el controlador verifica la identidad del token vs el recurso solicitado.
+- RBAC por endpoint en `SecurityConfig.java` con Spring Security (`hasRole("ADMINISTRADOR_RIESGO")`, `hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")`).
+- Regla "solo propio" en `GET /usuarios/{id}`: el ANALISTA_CREDITO solo puede consultar su propio perfil; el controlador verifica la identidad del token vs el recurso solicitado.
 - Autenticacion stateless: cada request se valida de forma independiente mediante el JWT en el header `Authorization`.
 - Respuestas 401 (no autenticado) y 403 (sin permisos) con cuerpo JSON estandarizado (`ApiError`).
 
@@ -111,7 +111,8 @@ Este documento analiza como el backend aborda cada categoria del OWASP Top 10 (2
 
 **Medidas implementadas:**
 - BCrypt con factor de costo por defecto (10) para hashing de contrasenas.
-- Validacion de contrasena minima de 8 caracteres (`@Size(min = 8)`).
+- Validacion de contrasena de 12 a 72 caracteres (`@Size(min = 12, max = 72)`; 72 es el limite de BCrypt).
+- Correo normalizado y unicidad por indice `lower(email)`; sin credenciales sembradas en migraciones (primer administrador por variables de entorno).
 - Token JWT con expiracion configurable (default 1 hora).
 - Usuarios inactivos (`activo = false`) no pueden autenticarse — `AuthService.login()` verifica el estado.
 - Endpoint `/validate` consulta el estado actual del usuario en BD, no solo el token.

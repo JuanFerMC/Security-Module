@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Autenticacion", description = "Login, renovacion y validacion de tokens JWT. El endpoint login es publico; refresh y validate requieren token valido con rol ADMIN o ANALISTA.")
+@Tag(name = "Autenticacion", description = "Login, renovacion y validacion de tokens JWT. El endpoint login es publico; refresh y validate requieren token valido con rol ADMINISTRADOR_RIESGO o ANALISTA_CREDITO.")
 public class AuthController {
 
     private final AuthInputPort authInputPort;
@@ -43,7 +43,7 @@ public class AuthController {
     @PostMapping("/refresh")
     @Operation(
             summary = "Renovar token",
-            description = "Emite un nuevo JWT a partir de un token valido no expirado. Requiere ADMIN o ANALISTA."
+            description = "Emite un nuevo JWT a partir de un token valido no expirado. Requiere ADMINISTRADOR_RIESGO o ANALISTA_CREDITO."
     )
     @ApiResponse(responseCode = "200", description = "Token renovado")
     @ApiResponse(responseCode = "401", description = "Token invalido o expirado",

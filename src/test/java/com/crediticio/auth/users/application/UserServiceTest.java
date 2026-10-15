@@ -5,6 +5,7 @@ import com.crediticio.auth.roles.domain.Rol;
 import com.crediticio.auth.roles.ports.output.RolRepositoryPort;
 import com.crediticio.auth.shared.exception.DuplicateEmailException;
 import com.crediticio.auth.shared.exception.InvalidCredentialsException;
+import com.crediticio.auth.shared.exception.RolNoPermitidoException;
 import com.crediticio.auth.shared.exception.RolNotFoundException;
 import com.crediticio.auth.shared.exception.UserNotFoundException;
 import com.crediticio.auth.users.application.dto.ChangePasswordRequest;
@@ -15,6 +16,7 @@ import com.crediticio.auth.users.domain.Usuario;
 import com.crediticio.auth.users.ports.output.UserRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,7 +48,7 @@ class UserServiceTest {
     @InjectMocks
     private UserService userService;
 
-    private final Rol adminRol = Rol.builder().id(1L).nombre("ADMIN").build();
+    private final Rol adminRol = Rol.builder().id(1L).nombre("ADMINISTRADOR_RIESGO").build();
 
     private Usuario buildUsuario(Long id, String nombre, String email) {
         return Usuario.builder()
@@ -75,11 +78,11 @@ class UserServiceTest {
                     .build();
         });
 
-        UserResponse response = userService.createUser(request);
+        UserResponse response = userService.createUser(request, "admin@test.com");
 
         assertEquals("Juan", response.getNombre());
         assertEquals("juan@test.com", response.getEmail());
-        assertEquals("ADMIN", response.getRolNombre());
+        assertEquals("ADMINISTRADOR_RIESGO", response.getRolNombre());
         assertTrue(response.isActivo());
         verify(passwordEncoder).encode("password123");
     }
@@ -89,7 +92,7 @@ class UserServiceTest {
         CreateUserRequest request = new CreateUserRequest("Juan", "juan@test.com", "password123", 1L);
         when(userRepository.existsByEmail("juan@test.com")).thenReturn(true);
 
-        assertThrows(DuplicateEmailException.class, () -> userService.createUser(request));
+        assertThrows(DuplicateEmailException.class, () -> userService.createUser(request, "admin@test.com"));
         verify(userRepository, never()).save(any());
     }
 
@@ -99,7 +102,56 @@ class UserServiceTest {
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(rolRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThrows(RolNotFoundException.class, () -> userService.createUser(request));
+        assertThrows(RolNotFoundException.class, () -> userService.createUser(request, "admin@test.com"));
+    }
+
+    @Test
+    void createUser_normalizesEmailAndRecordsActor() {
+        CreateUserRequest request = new CreateUserRequest("Juan", "  Juan@TEST.com ", "passwordSegura123", 1L);
+
+        when(userRepository.existsByEmail("juan@test.com")).thenReturn(false);
+        when(rolRepository.findById(1L)).thenReturn(Optional.of(adminRol));
+        when(passwordEncoder.encode("passwordSegura123")).thenReturn("hashed");
+        when(userRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserResponse response = userService.createUser(request, "admin@test.com");
+
+        ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
+        verify(userRepository).save(captor.capture());
+        assertEquals("juan@test.com", captor.getValue().getEmail());
+        assertEquals("admin@test.com", captor.getValue().getCreadoPor());
+        assertEquals("juan@test.com", response.getEmail());
+    }
+
+    @Test
+    void createUser_duplicateEmailDifferentCase_throwsWithoutSaving() {
+        CreateUserRequest request = new CreateUserRequest("Juan", "JUAN@test.com", "passwordSegura123", 1L);
+        when(userRepository.existsByEmail("juan@test.com")).thenReturn(true);
+
+        assertThrows(DuplicateEmailException.class, () -> userService.createUser(request, "admin@test.com"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rolNotAllowed_throws() {
+        Rol otroRol = Rol.builder().id(7L).nombre("SUPERUSUARIO").build();
+        CreateUserRequest request = new CreateUserRequest("Juan", "juan@test.com", "passwordSegura123", 7L);
+        when(userRepository.existsByEmail("juan@test.com")).thenReturn(false);
+        when(rolRepository.findById(7L)).thenReturn(Optional.of(otroRol));
+
+        assertThrows(RolNoPermitidoException.class, () -> userService.createUser(request, "admin@test.com"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_concurrentDuplicate_mapsToDuplicateEmail() {
+        CreateUserRequest request = new CreateUserRequest("Juan", "juan@test.com", "passwordSegura123", 1L);
+        when(userRepository.existsByEmail("juan@test.com")).thenReturn(false);
+        when(rolRepository.findById(1L)).thenReturn(Optional.of(adminRol));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        when(userRepository.save(any(Usuario.class))).thenThrow(new DataIntegrityViolationException("uq_usuarios_email_lower"));
+
+        assertThrows(DuplicateEmailException.class, () -> userService.createUser(request, "admin@test.com"));
     }
 
     @Test

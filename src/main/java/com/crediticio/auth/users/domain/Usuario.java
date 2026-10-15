@@ -20,4 +20,5 @@ public class Usuario {
     private boolean activo;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaModificacion;
+    private String creadoPor;
 }

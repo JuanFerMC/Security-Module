@@ -24,7 +24,7 @@ public class UserResponse {
     @Schema(description = "Correo electronico", example = "juan.perez@ejemplo.com")
     private String email;
 
-    @Schema(description = "Nombre del rol asignado", example = "ANALISTA")
+    @Schema(description = "Nombre del rol asignado", example = "ANALISTA_CREDITO")
     private String rolNombre;
 
     @Schema(description = "Estado del usuario", example = "true")

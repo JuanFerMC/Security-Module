@@ -33,7 +33,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/usuarios")
 @RequiredArgsConstructor
-@Tag(name = "Usuarios", description = "CRUD de usuarios del sistema. Requiere rol ADMIN para crear, listar y cambiar estado. ANALISTA puede consultar su propio perfil.")
+@Tag(name = "Usuarios", description = "CRUD de usuarios del sistema. Requiere rol ADMINISTRADOR_RIESGO para crear, listar y cambiar estado. ANALISTA_CREDITO puede consultar su propio perfil.")
 public class UsuarioController {
 
     private final CreateUserInputPort createUserInputPort;
@@ -44,22 +44,23 @@ public class UsuarioController {
     @PostMapping
     @Operation(
             summary = "Crear usuario",
-            description = "Registra un nuevo usuario con rol asignado. Solo ADMIN."
+            description = "Registra un nuevo usuario con rol asignado. Solo ADMINISTRADOR_RIESGO."
     )
     @ApiResponse(responseCode = "201", description = "Usuario creado exitosamente")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "409", description = "Email ya registrado",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
-        UserResponse response = createUserInputPort.createUser(request);
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request,
+                                                   Authentication authentication) {
+        UserResponse response = createUserInputPort.createUser(request, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
     @Operation(
             summary = "Listar usuarios",
-            description = "Retorna todos los usuarios del sistema. Solo ADMIN."
+            description = "Retorna todos los usuarios del sistema. Solo ADMINISTRADOR_RIESGO."
     )
     @ApiResponse(responseCode = "200", description = "Lista de usuarios")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
@@ -69,10 +70,10 @@ public class UsuarioController {
     @GetMapping("/{id}")
     @Operation(
             summary = "Consultar usuario por ID",
-            description = "ADMIN puede consultar cualquier usuario. ANALISTA solo su propio perfil."
+            description = "ADMINISTRADOR_RIESGO puede consultar cualquier usuario. ANALISTA_CREDITO solo su propio perfil."
     )
     @ApiResponse(responseCode = "200", description = "Detalle del usuario")
-    @ApiResponse(responseCode = "403", description = "ANALISTA intentó consultar otro perfil",
+    @ApiResponse(responseCode = "403", description = "ANALISTA_CREDITO intentó consultar otro perfil",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Usuario no encontrado",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -80,7 +81,7 @@ public class UsuarioController {
         UserResponse user = getUserInputPort.getUserById(id);
 
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMINISTRADOR_RIESGO"));
 
         if (!isAdmin && !user.getEmail().equals(authentication.getName())) {
             throw new AccessDeniedException("Solo puede consultar su propio perfil");
@@ -92,7 +93,7 @@ public class UsuarioController {
     @PatchMapping("/{id}/estado")
     @Operation(
             summary = "Activar o desactivar usuario",
-            description = "Cambia el estado activo/inactivo de un usuario. Solo ADMIN."
+            description = "Cambia el estado activo/inactivo de un usuario. Solo ADMINISTRADOR_RIESGO."
     )
     @ApiResponse(responseCode = "200", description = "Estado actualizado")
     @ApiResponse(responseCode = "404", description = "Usuario no encontrado",
@@ -106,12 +107,12 @@ public class UsuarioController {
     @PatchMapping("/{id}/password")
     @Operation(
             summary = "Cambiar contrasena",
-            description = "ADMIN puede cambiar la contrasena de cualquier usuario (reset). ANALISTA solo la propia, verificando la contrasena actual."
+            description = "ADMINISTRADOR_RIESGO puede cambiar la contrasena de cualquier usuario (reset). ANALISTA_CREDITO solo la propia, verificando la contrasena actual."
     )
     @ApiResponse(responseCode = "204", description = "Contrasena actualizada")
     @ApiResponse(responseCode = "401", description = "Contrasena actual incorrecta",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "403", description = "ANALISTA intento cambiar contrasena de otro usuario",
+    @ApiResponse(responseCode = "403", description = "ANALISTA_CREDITO intento cambiar contrasena de otro usuario",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Usuario no encontrado",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -121,7 +122,7 @@ public class UsuarioController {
             Authentication authentication) {
 
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMINISTRADOR_RIESGO"));
 
         changePasswordInputPort.changePassword(id, request, authentication.getName(), isAdmin);
         return ResponseEntity.noContent().build();

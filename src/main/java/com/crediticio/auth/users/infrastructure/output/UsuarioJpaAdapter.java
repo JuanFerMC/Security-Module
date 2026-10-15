@@ -46,6 +46,11 @@ public class UsuarioJpaAdapter implements UserRepositoryPort {
         return usuarioJpaRepository.existsByEmail(email);
     }
 
+    @Override
+    public boolean existsByRolNombre(String nombreRol) {
+        return usuarioJpaRepository.existsByRol_Nombre(nombreRol);
+    }
+
     private Usuario toDomain(UsuarioJpaEntity entity) {
         return Usuario.builder()
                 .id(entity.getId())
@@ -59,6 +64,7 @@ public class UsuarioJpaAdapter implements UserRepositoryPort {
                 .activo(entity.getActivo())
                 .fechaCreacion(entity.getFechaCreacion())
                 .fechaModificacion(entity.getFechaModificacion())
+                .creadoPor(entity.getCreadoPor())
                 .build();
     }
 
@@ -72,6 +78,7 @@ public class UsuarioJpaAdapter implements UserRepositoryPort {
         entity.setActivo(usuario.isActivo());
         entity.setFechaCreacion(usuario.getFechaCreacion());
         entity.setFechaModificacion(usuario.getFechaModificacion());
+        entity.setCreadoPor(usuario.getCreadoPor());
         return entity;
     }
 }

@@ -176,7 +176,7 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * El acceso a los endpoints se controla mediante el rol del usuario autenticado.
 * La matriz de permisos mínima:
 
-| Endpoint | ADMIN | ANALISTA | Público |
+| Endpoint | ADMINISTRADOR_RIESGO | ANALISTA_CREDITO | Público |
 |---|---|---|---|
 | `POST /api/v1/auth/login` | — | — | ✓ |
 | `POST /api/v1/auth/refresh` | ✓ | ✓ | — |
@@ -199,13 +199,17 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * Los ids `SERIAL` (INTEGER) de las tablas se mapean a `Long` con `@JdbcTypeCode(SqlTypes.INTEGER)` en las entidades JPA; omitirlo rompe `ddl-auto: validate` (espera BIGINT).
 * Compilar y ejecutar con **JDK 21**: con JDK 24 Lombok 1.18.34 no genera getters/setters. Ante `ClassFormatError` en `target/`, ejecutar `clean`.
 * Todo ajuste de configuración/arranque se registra en `docs/CAMBIOS_CONFIGURACION.md`.
+* **Roles (HU08 RF06):** solo `ADMINISTRADOR_RIESGO` y `ANALISTA_CREDITO` (`RolSistema`). No reintroducir `ADMIN`/`ANALISTA`.
+* **Primer administrador (RF09/RF10):** lo crea `AdminBootstrapRunner` al arrancar con `INIT_ADMIN_EMAIL`/`INIT_ADMIN_PASSWORD`, solo si no existe ningún `ADMINISTRADOR_RIESGO`. Prohibido sembrar credenciales en migraciones o exponer un endpoint público para ello.
+* **Correo:** siempre normalizado con `EmailNormalizer` (minúsculas, sin espacios laterales); unicidad por índice `lower(email)`.
+* **Contraseña:** 12 a 72 caracteres (HU08 RF04; 72 es el límite de BCrypt).
 * `spring.jpa.hibernate.ddl-auto` no debe usarse para gestionar el esquema en producción. En el perfil `test` puede usarse `create-drop` sobre H2 con Flyway deshabilitado.
 
 ## 11. Modelo de datos: tablas de este backend
 
 El modelo relacional de este backend contempla las siguientes tablas:
 
-1. `roles`: catálogo de roles del sistema (`ADMIN`, `ANALISTA`).
+1. `roles`: catálogo de roles del sistema (`ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`).
    - `id_rol` (PK, SERIAL)
    - `nombre` (VARCHAR UNIQUE NOT NULL)
 
@@ -231,10 +235,10 @@ Los endpoints previstos son:
 * `GET /api/v1/auth/validate` — Valida un token JWT y devuelve la identidad y rol del usuario (consumido por el motor de scoring para verificar peticiones).
 
 ### Usuarios (`/api/v1/usuarios`)
-* `POST /api/v1/usuarios` — Crea un nuevo usuario con rol asignado (solo ADMIN).
-* `GET /api/v1/usuarios` — Lista todos los usuarios (solo ADMIN).
-* `GET /api/v1/usuarios/{id}` — Consulta el detalle de un usuario (ADMIN o el propio usuario).
-* `PATCH /api/v1/usuarios/{id}/estado` — Activa o desactiva un usuario (solo ADMIN).
+* `POST /api/v1/usuarios` — Crea un nuevo usuario con rol asignado (solo ADMINISTRADOR_RIESGO).
+* `GET /api/v1/usuarios` — Lista todos los usuarios (solo ADMINISTRADOR_RIESGO).
+* `GET /api/v1/usuarios/{id}` — Consulta el detalle de un usuario (ADMINISTRADOR_RIESGO o el propio usuario).
+* `PATCH /api/v1/usuarios/{id}/estado` — Activa o desactiva un usuario (solo ADMINISTRADOR_RIESGO).
 
 No se deben implementar endpoints adicionales sin que la HU lo requiera.
 
@@ -249,6 +253,9 @@ No se deben implementar endpoints adicionales sin que la HU lo requiera.
 | `JWT_EXPIRATION_MS` | Tiempo de expiración del token en ms | `3600000` (1 hora) |
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos (frontend) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` (para no colisionar con el motor de scoring en `8080`) |
+| `INIT_ADMIN_EMAIL` | Correo del primer administrador (solo primer arranque; ver HU08 RF09/RF10) | (secreto operativo) |
+| `INIT_ADMIN_PASSWORD` | Contraseña del primer administrador, mínimo 12 caracteres | (secreto) |
+| `INIT_ADMIN_NOMBRE` | Nombre del primer administrador | `Administrador` |
 
 ### Reglas de documentación de configuración y despliegue
 

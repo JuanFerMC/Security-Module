@@ -2,9 +2,12 @@ package com.crediticio.auth.users.application;
 
 import com.crediticio.auth.authentication.ports.output.PasswordEncoderPort;
 import com.crediticio.auth.roles.domain.Rol;
+import com.crediticio.auth.roles.domain.RolSistema;
 import com.crediticio.auth.roles.ports.output.RolRepositoryPort;
+import com.crediticio.auth.shared.EmailNormalizer;
 import com.crediticio.auth.shared.exception.DuplicateEmailException;
 import com.crediticio.auth.shared.exception.InvalidCredentialsException;
+import com.crediticio.auth.shared.exception.RolNoPermitidoException;
 import com.crediticio.auth.shared.exception.RolNotFoundException;
 import com.crediticio.auth.shared.exception.UserNotFoundException;
 import com.crediticio.auth.users.application.dto.ChangePasswordRequest;
@@ -18,12 +21,15 @@ import com.crediticio.auth.users.ports.input.GetUserInputPort;
 import com.crediticio.auth.users.ports.input.ToggleUserStatusInputPort;
 import com.crediticio.auth.users.ports.output.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -34,23 +40,38 @@ public class UserService implements CreateUserInputPort, GetUserInputPort, Toggl
     private final PasswordEncoderPort passwordEncoder;
 
     @Override
-    public UserResponse createUser(CreateUserRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateEmailException("El email ya está registrado: " + request.getEmail());
+    public UserResponse createUser(CreateUserRequest request, String actor) {
+        String email = EmailNormalizer.normalize(request.getEmail());
+
+        if (userRepository.existsByEmail(email)) {
+            throw new DuplicateEmailException("El email ya está registrado: " + email);
         }
 
         Rol rol = rolRepository.findById(request.getIdRol())
                 .orElseThrow(() -> new RolNotFoundException("Rol no encontrado con id: " + request.getIdRol()));
 
+        if (!RolSistema.PERMITIDOS.contains(rol.getNombre())) {
+            throw new RolNoPermitidoException("Rol no permitido: " + rol.getNombre());
+        }
+
         Usuario usuario = Usuario.builder()
                 .nombre(request.getNombre())
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .rol(rol)
                 .activo(true)
+                .creadoPor(actor)
                 .build();
 
-        Usuario saved = userRepository.save(usuario);
+        Usuario saved;
+        try {
+            saved = userRepository.save(usuario);
+        } catch (DataIntegrityViolationException e) {
+            // Carrera entre dos peticiones con el mismo correo: la BD garantiza la unicidad (RF03/RF11).
+            throw new DuplicateEmailException("El email ya está registrado: " + email);
+        }
+
+        log.info("Usuario creado: id={}, rol={}, actor={}", saved.getId(), rol.getNombre(), actor);
         return toResponse(saved);
     }
 
@@ -83,6 +104,7 @@ public class UserService implements CreateUserInputPort, GetUserInputPort, Toggl
                 .rol(usuario.getRol())
                 .activo(request.getActivo())
                 .fechaCreacion(usuario.getFechaCreacion())
+                .creadoPor(usuario.getCreadoPor())
                 .build();
 
         Usuario saved = userRepository.save(updated);
@@ -115,6 +137,7 @@ public class UserService implements CreateUserInputPort, GetUserInputPort, Toggl
                 .rol(usuario.getRol())
                 .activo(usuario.isActivo())
                 .fechaCreacion(usuario.getFechaCreacion())
+                .creadoPor(usuario.getCreadoPor())
                 .build();
 
         userRepository.save(updated);

@@ -59,6 +59,9 @@ public class UsuarioJpaEntity {
     @Column(name = "fecha_modificacion")
     private LocalDateTime fechaModificacion;
 
+    @Column(name = "creado_por", updatable = false, length = 255)
+    private String creadoPor;
+
     @PrePersist
     protected void onCreate() {
         this.fechaCreacion = LocalDateTime.now();

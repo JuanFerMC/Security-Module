@@ -16,4 +16,6 @@ public interface UserRepositoryPort {
     List<Usuario> findAll();
 
     boolean existsByEmail(String email);
+
+    boolean existsByRolNombre(String nombreRol);
 }

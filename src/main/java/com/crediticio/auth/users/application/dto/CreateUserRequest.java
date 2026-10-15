@@ -29,11 +29,11 @@ public class CreateUserRequest {
     private String email;
 
     @NotBlank
-    @Size(min = 8)
-    @Schema(description = "Contrasena (minimo 8 caracteres)", example = "Segura123!")
+    @Size(min = 12, max = 72)
+    @Schema(description = "Contrasena (12 a 72 caracteres)", example = "SeguraClave2026!")
     private String password;
 
     @NotNull
-    @Schema(description = "ID del rol a asignar (1=ADMIN, 2=ANALISTA)", example = "2")
+    @Schema(description = "ID del rol a asignar (solo ADMINISTRADOR_RIESGO o ANALISTA_CREDITO)", example = "2")
     private Long idRol;
 }

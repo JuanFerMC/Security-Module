@@ -55,14 +55,14 @@ Autentica un usuario con email y contrasena. Retorna un JWT firmado y el rol.
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "rol": "ADMIN"
+  "rol": "ADMINISTRADOR_RIESGO"
 }
 ```
 
 | Campo | Tipo | Descripcion |
 |---|---|---|
 | `token` | string | JWT firmado. Incluir como `Bearer <token>` en peticiones protegidas |
-| `rol` | string | `ADMIN` o `ANALISTA` |
+| `rol` | string | `ADMINISTRADOR_RIESGO` o `ANALISTA_CREDITO` |
 
 **Errores:**
 
@@ -77,7 +77,7 @@ Autentica un usuario con email y contrasena. Retorna un JWT firmado y el rol.
 
 Emite un nuevo JWT a partir de un token valido no expirado. El token anterior sigue siendo valido hasta su expiracion.
 
-**Acceso:** ADMIN, ANALISTA
+**Acceso:** ADMINISTRADOR_RIESGO, ANALISTA_CREDITO
 
 **Request:**
 
@@ -91,7 +91,7 @@ Body: (vacio)
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "rol": "ADMIN"
+  "rol": "ADMINISTRADOR_RIESGO"
 }
 ```
 
@@ -107,7 +107,7 @@ Body: (vacio)
 
 Valida un JWT y retorna la identidad del usuario consultando la BD. Consumido internamente por el Motor de Scoring para verificar peticiones.
 
-**Acceso:** ADMIN, ANALISTA
+**Acceso:** ADMINISTRADOR_RIESGO, ANALISTA_CREDITO
 
 **Request:**
 
@@ -122,7 +122,7 @@ Body: (vacio)
 {
   "userId": 1,
   "email": "admin@crediticio.com",
-  "rol": "ADMIN"
+  "rol": "ADMINISTRADOR_RIESGO"
 }
 ```
 
@@ -144,7 +144,7 @@ Body: (vacio)
 
 Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash BCrypt.
 
-**Acceso:** Solo ADMIN
+**Acceso:** Solo ADMINISTRADOR_RIESGO
 
 **Request:**
 
@@ -161,8 +161,10 @@ Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash B
 |---|---|---|
 | `nombre` | string | Requerido, max 150 caracteres |
 | `email` | string | Requerido, formato email, max 255, unico en el sistema |
-| `password` | string | Requerido, minimo 8 caracteres |
-| `idRol` | number | Requerido. `1` = ADMIN, `2` = ANALISTA |
+| `password` | string | Requerido, de 12 a 72 caracteres |
+| `idRol` | number | Requerido. Debe corresponder a `ADMINISTRADOR_RIESGO` o `ANALISTA_CREDITO` (ids segun la tabla `roles`) |
+
+> El `email` se guarda normalizado (minusculas) y es unico sin distinguir mayusculas. El campo `creado_por` registra al administrador que creo el usuario.
 
 **Response 201:**
 
@@ -171,7 +173,7 @@ Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash B
   "id": 3,
   "nombre": "Juan Perez",
   "email": "juan.perez@ejemplo.com",
-  "rolNombre": "ANALISTA",
+  "rolNombre": "ANALISTA_CREDITO",
   "activo": true,
   "fechaCreacion": "2026-10-07T14:30:00",
   "fechaModificacion": null
@@ -184,9 +186,10 @@ Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash B
 
 | HTTP | errorCode | Causa |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Campos vacios, email invalido, password < 8 chars, idRol null. `details` contiene errores por campo |
+| 400 | `VALIDATION_ERROR` | Campos vacios, email invalido, password fuera de 12-72 chars, idRol null. `details` contiene errores por campo |
+| 400 | `ROL_NOT_ALLOWED` | El rol resuelto no es `ADMINISTRADOR_RIESGO` ni `ANALISTA_CREDITO` |
 | 401 | `UNAUTHORIZED` | Sin token |
-| 403 | `ACCESS_DENIED` | El usuario no es ADMIN |
+| 403 | `ACCESS_DENIED` | El usuario no es ADMINISTRADOR_RIESGO |
 | 404 | `ROL_NOT_FOUND` | El `idRol` no existe en la tabla roles |
 | 409 | `DUPLICATE_EMAIL` | Ya existe un usuario con ese email |
 
@@ -196,7 +199,7 @@ Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash B
 
 Lista todos los usuarios del sistema.
 
-**Acceso:** Solo ADMIN
+**Acceso:** Solo ADMINISTRADOR_RIESGO
 
 **Request:**
 
@@ -213,7 +216,7 @@ Body: (vacio)
     "id": 1,
     "nombre": "Admin Principal",
     "email": "admin@crediticio.com",
-    "rolNombre": "ADMIN",
+    "rolNombre": "ADMINISTRADOR_RIESGO",
     "activo": true,
     "fechaCreacion": "2026-10-01T10:00:00",
     "fechaModificacion": null
@@ -222,7 +225,7 @@ Body: (vacio)
     "id": 2,
     "nombre": "Ana Garcia",
     "email": "ana.garcia@ejemplo.com",
-    "rolNombre": "ANALISTA",
+    "rolNombre": "ANALISTA_CREDITO",
     "activo": true,
     "fechaCreacion": "2026-10-05T09:15:00",
     "fechaModificacion": "2026-10-06T11:30:00"
@@ -235,7 +238,7 @@ Body: (vacio)
 | HTTP | errorCode | Causa |
 |---|---|---|
 | 401 | `UNAUTHORIZED` | Sin token |
-| 403 | `ACCESS_DENIED` | El usuario no es ADMIN |
+| 403 | `ACCESS_DENIED` | El usuario no es ADMINISTRADOR_RIESGO |
 
 ---
 
@@ -243,7 +246,7 @@ Body: (vacio)
 
 Consulta el detalle de un usuario por su ID.
 
-**Acceso:** ADMIN (cualquier usuario), ANALISTA (solo su propio perfil)
+**Acceso:** ADMINISTRADOR_RIESGO (cualquier usuario), ANALISTA_CREDITO (solo su propio perfil)
 
 **Request:**
 
@@ -260,7 +263,7 @@ Body: (vacio)
   "id": 2,
   "nombre": "Ana Garcia",
   "email": "ana.garcia@ejemplo.com",
-  "rolNombre": "ANALISTA",
+  "rolNombre": "ANALISTA_CREDITO",
   "activo": true,
   "fechaCreacion": "2026-10-05T09:15:00",
   "fechaModificacion": null
@@ -274,7 +277,7 @@ Body: (vacio)
 | HTTP | errorCode | Causa |
 |---|---|---|
 | 401 | `UNAUTHORIZED` | Sin token |
-| 403 | `ACCESS_DENIED` | ANALISTA intento consultar el perfil de otro usuario |
+| 403 | `ACCESS_DENIED` | ANALISTA_CREDITO intento consultar el perfil de otro usuario |
 | 404 | `USER_NOT_FOUND` | No existe usuario con ese ID |
 
 ---
@@ -283,7 +286,7 @@ Body: (vacio)
 
 Activa o desactiva un usuario. Un usuario desactivado no puede hacer login.
 
-**Acceso:** Solo ADMIN
+**Acceso:** Solo ADMINISTRADOR_RIESGO
 
 **Request:**
 
@@ -304,7 +307,7 @@ Activa o desactiva un usuario. Un usuario desactivado no puede hacer login.
   "id": 2,
   "nombre": "Ana Garcia",
   "email": "ana.garcia@ejemplo.com",
-  "rolNombre": "ANALISTA",
+  "rolNombre": "ANALISTA_CREDITO",
   "activo": false,
   "fechaCreacion": "2026-10-05T09:15:00",
   "fechaModificacion": "2026-10-07T16:00:00"
@@ -316,7 +319,7 @@ Activa o desactiva un usuario. Un usuario desactivado no puede hacer login.
 | HTTP | errorCode | Causa |
 |---|---|---|
 | 401 | `UNAUTHORIZED` | Sin token |
-| 403 | `ACCESS_DENIED` | El usuario no es ADMIN |
+| 403 | `ACCESS_DENIED` | El usuario no es ADMINISTRADOR_RIESGO |
 | 404 | `USER_NOT_FOUND` | No existe usuario con ese ID |
 
 ---
@@ -325,12 +328,12 @@ Activa o desactiva un usuario. Un usuario desactivado no puede hacer login.
 
 Cambia la contrasena de un usuario.
 
-- **ADMIN:** puede cambiar la contrasena de cualquier usuario (reset administrativo). No necesita enviar `currentPassword`.
-- **ANALISTA:** solo puede cambiar su propia contrasena. Debe enviar `currentPassword` para verificar identidad.
+- **ADMINISTRADOR_RIESGO:** puede cambiar la contrasena de cualquier usuario (reset administrativo). No necesita enviar `currentPassword`.
+- **ANALISTA_CREDITO:** solo puede cambiar su propia contrasena. Debe enviar `currentPassword` para verificar identidad.
 
-**Acceso:** ADMIN, ANALISTA
+**Acceso:** ADMINISTRADOR_RIESGO, ANALISTA_CREDITO
 
-**Request (ADMIN reseteando contrasena de otro usuario):**
+**Request (ADMINISTRADOR_RIESGO reseteando contrasena de otro usuario):**
 
 ```json
 {
@@ -338,7 +341,7 @@ Cambia la contrasena de un usuario.
 }
 ```
 
-**Request (ANALISTA cambiando su propia contrasena):**
+**Request (ANALISTA_CREDITO cambiando su propia contrasena):**
 
 ```json
 {
@@ -349,8 +352,8 @@ Cambia la contrasena de un usuario.
 
 | Campo | Tipo | Validacion |
 |---|---|---|
-| `currentPassword` | string | Requerido solo si no es ADMIN. Se verifica contra el hash actual |
-| `newPassword` | string | Requerido, minimo 8 caracteres |
+| `currentPassword` | string | Requerido solo si no es ADMINISTRADOR_RIESGO. Se verifica contra el hash actual |
+| `newPassword` | string | Requerido, de 12 a 72 caracteres |
 
 **Response 204:** (sin cuerpo — la contrasena se cambio exitosamente)
 
@@ -358,10 +361,10 @@ Cambia la contrasena de un usuario.
 
 | HTTP | errorCode | Causa |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `newPassword` vacia o < 8 caracteres |
+| 400 | `VALIDATION_ERROR` | `newPassword` vacia o fuera de 12-72 caracteres |
 | 401 | `UNAUTHORIZED` | Sin token |
-| 401 | `INVALID_CREDENTIALS` | `currentPassword` incorrecta o no proporcionada (ANALISTA) |
-| 403 | `ACCESS_DENIED` | ANALISTA intento cambiar contrasena de otro usuario |
+| 401 | `INVALID_CREDENTIALS` | `currentPassword` incorrecta o no proporcionada (ANALISTA_CREDITO) |
+| 403 | `ACCESS_DENIED` | ANALISTA_CREDITO intento cambiar contrasena de otro usuario |
 | 404 | `USER_NOT_FOUND` | No existe usuario con ese ID |
 
 ---
@@ -409,28 +412,20 @@ Todas las respuestas de error usan el mismo formato:
 
 | ID | Nombre | Descripcion |
 |---|---|---|
-| 1 | `ADMIN` | Acceso completo. Puede crear usuarios, listar, activar/desactivar y resetear contrasenas |
-| 2 | `ANALISTA` | Acceso limitado. Puede ver su propio perfil, cambiar su contrasena, y usar refresh/validate |
+| 1 | `ADMINISTRADOR_RIESGO` | Acceso completo. Puede crear usuarios, listar, activar/desactivar y resetear contrasenas |
+| 2 | `ANALISTA_CREDITO` | Acceso limitado. Puede ver su propio perfil, cambiar su contrasena, y usar refresh/validate |
 
 ---
 
-## Usuario administrador inicial
+## Primer administrador
 
-La base de datos incluye un usuario ADMIN creado por migracion (seed) para resolver el problema chicken-and-egg:
-
-| Campo | Valor |
-|---|---|
-| Email | `admin@crediticio.com` |
-| Contrasena | `Admin2026!` |
-| Rol | ADMIN |
-
-**Importante:** cambiar esta contrasena inmediatamente despues del primer login usando `PATCH /api/v1/usuarios/{id}/password`.
+No existe endpoint publico ni usuario semilla con credencial conocida. El primer `ADMINISTRADOR_RIESGO` se crea al arrancar el backend con las variables de entorno `INIT_ADMIN_EMAIL` e `INIT_ADMIN_PASSWORD` (minimo 12 caracteres), solo si todavia no existe ningun administrador. Detalle en el README ("Primer administrador").
 
 ---
 
 ## Comportamiento con usuarios desactivados
 
-Cuando un ADMIN desactiva un usuario (`PATCH /usuarios/{id}/estado` con `activo: false`):
+Cuando un ADMINISTRADOR_RIESGO desactiva un usuario (`PATCH /usuarios/{id}/estado` con `activo: false`):
 
 - **Tokens existentes quedan invalidos inmediatamente.** El filtro JWT verifica el estado `activo` en BD en cada peticion.
 - **Login rechazado.** `POST /auth/login` retorna 401 con `INVALID_CREDENTIALS`.
@@ -479,19 +474,19 @@ async function login(email, password) {
   return data;
 }
 
-// Crear usuario (solo ADMIN)
+// Crear usuario (solo ADMINISTRADOR_RIESGO)
 async function createUser(nombre, email, password, idRol) {
   const { data } = await api.post('/usuarios', { nombre, email, password, idRol });
   return data;
 }
 
-// Listar usuarios (solo ADMIN)
+// Listar usuarios (solo ADMINISTRADOR_RIESGO)
 async function listUsers() {
   const { data } = await api.get('/usuarios');
   return data;
 }
 
-// Cambiar contrasena propia (ANALISTA)
+// Cambiar contrasena propia (ANALISTA_CREDITO)
 async function changeMyPassword(userId, currentPassword, newPassword) {
   await api.patch(`/usuarios/${userId}/password`, { currentPassword, newPassword });
 }

@@ -40,7 +40,7 @@ class AuthServiceTest {
         return Usuario.builder()
                 .id(1L).nombre("Juan").email("juan@test.com")
                 .passwordHash("hashed").activo(true)
-                .rol(Rol.builder().id(1L).nombre("ADMIN").build())
+                .rol(Rol.builder().id(1L).nombre("ADMINISTRADOR_RIESGO").build())
                 .fechaCreacion(LocalDateTime.now())
                 .build();
     }
@@ -50,12 +50,12 @@ class AuthServiceTest {
         Usuario usuario = buildActiveUser();
         when(userRepository.findByEmail("juan@test.com")).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
-        when(tokenProvider.generateToken("juan@test.com", "ADMIN")).thenReturn("jwt-token");
+        when(tokenProvider.generateToken("juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("jwt-token");
 
         LoginResponse response = authService.login(new LoginRequest("juan@test.com", "password123"));
 
         assertEquals("jwt-token", response.getToken());
-        assertEquals("ADMIN", response.getRol());
+        assertEquals("ADMINISTRADOR_RIESGO", response.getRol());
     }
 
     @Test
@@ -71,7 +71,7 @@ class AuthServiceTest {
         Usuario inactive = Usuario.builder()
                 .id(1L).nombre("Juan").email("juan@test.com")
                 .passwordHash("hashed").activo(false)
-                .rol(Rol.builder().id(1L).nombre("ADMIN").build())
+                .rol(Rol.builder().id(1L).nombre("ADMINISTRADOR_RIESGO").build())
                 .fechaCreacion(LocalDateTime.now())
                 .build();
         when(userRepository.findByEmail("juan@test.com")).thenReturn(Optional.of(inactive));
@@ -94,13 +94,13 @@ class AuthServiceTest {
     void refresh_validToken_returnsNewToken() {
         when(tokenProvider.isTokenValid("old-token")).thenReturn(true);
         when(tokenProvider.getEmailFromToken("old-token")).thenReturn("juan@test.com");
-        when(tokenProvider.getRolFromToken("old-token")).thenReturn("ADMIN");
-        when(tokenProvider.generateToken("juan@test.com", "ADMIN")).thenReturn("new-token");
+        when(tokenProvider.getRolFromToken("old-token")).thenReturn("ADMINISTRADOR_RIESGO");
+        when(tokenProvider.generateToken("juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("new-token");
 
         LoginResponse response = authService.refresh("old-token");
 
         assertEquals("new-token", response.getToken());
-        assertEquals("ADMIN", response.getRol());
+        assertEquals("ADMINISTRADOR_RIESGO", response.getRol());
     }
 
     @Test
@@ -115,14 +115,14 @@ class AuthServiceTest {
         Usuario usuario = buildActiveUser();
         when(tokenProvider.isTokenValid("valid-token")).thenReturn(true);
         when(tokenProvider.getEmailFromToken("valid-token")).thenReturn("juan@test.com");
-        when(tokenProvider.getRolFromToken("valid-token")).thenReturn("ADMIN");
+        when(tokenProvider.getRolFromToken("valid-token")).thenReturn("ADMINISTRADOR_RIESGO");
         when(userRepository.findByEmail("juan@test.com")).thenReturn(Optional.of(usuario));
 
         TokenValidationResponse response = authService.validate("valid-token");
 
         assertEquals(1L, response.getUserId());
         assertEquals("juan@test.com", response.getEmail());
-        assertEquals("ADMIN", response.getRol());
+        assertEquals("ADMINISTRADOR_RIESGO", response.getRol());
     }
 
     @Test
