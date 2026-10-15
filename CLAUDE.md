@@ -246,6 +246,16 @@ No se deben implementar endpoints adicionales sin que la HU lo requiera.
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos (frontend) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` (para no colisionar con el motor de scoring en `8080`) |
 
+### Reglas de documentación de configuración y despliegue
+
+* `JWT_SECRET` y `SPRING_DATASOURCE_PASSWORD` **no tienen valor por defecto**: la app no arranca (o falla al firmar tokens) sin ellas. Siempre deben figurar como obligatorias en README y `.env.example`.
+* `JWT_SECRET` no viene de ningún servicio: la genera quien despliega (aleatoria, 32+ caracteres), es distinta por entorno y debe coincidir con la del motor de scoring si este valida tokens por su cuenta.
+* Spring Boot **no lee `.env` automáticamente**. Las variables se definen en el entorno del proceso (terminal, IDE, Docker `-e`, servidor). `.env` está en `.gitignore`; la plantilla versionada es `.env.example`.
+* Los secretos nunca se escriben en código, commits, logs ni chat. Los valores reales se configuran en el entorno de destino.
+* El CI solo compila y prueba contra H2 y no despliega; el despliegue requiere configurar las variables en el destino.
+* **Todo cambio que agregue, renombre o elimine una variable de entorno, o cambie el procedimiento de arranque/despliegue, debe actualizar en el mismo cambio:** este archivo (sección 13), `README.md` (Configuración, Primer arranque, Despliegue, Problemas comunes) y `.env.example`.
+* Antes de dar por documentado un cambio de arranque, verificar los pasos del README en una terminal limpia (sin variables previas).
+
 ## 14. Reglas de validación y pruebas
 
 * Toda nueva funcionalidad debe incluir pruebas automatizadas (unitarias y/o de integración) que cubran el comportamiento esperado y los criterios de aceptación de la HU.
