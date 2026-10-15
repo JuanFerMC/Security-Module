@@ -15,11 +15,11 @@ import lombok.Setter;
 @Schema(description = "Solicitud de cambio de contrasena")
 public class ChangePasswordRequest {
 
-    @Schema(description = "Contrasena actual (obligatorio para usuarios no ADMIN que cambian su propia contrasena)", example = "MiClaveActual1!")
+    @Schema(description = "Contrasena actual (obligatorio para usuarios no ADMINISTRADOR_RIESGO que cambian su propia contrasena)", example = "MiClaveActual1!")
     private String currentPassword;
 
     @NotBlank
-    @Size(min = 8)
-    @Schema(description = "Nueva contrasena (minimo 8 caracteres)", example = "NuevaClave123!")
+    @Size(min = 12, max = 72)
+    @Schema(description = "Nueva contrasena (12 a 72 caracteres)", example = "NuevaClave2026!")
     private String newPassword;
 }

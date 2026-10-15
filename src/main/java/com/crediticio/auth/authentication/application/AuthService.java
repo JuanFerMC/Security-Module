@@ -6,6 +6,7 @@ import com.crediticio.auth.authentication.application.dto.TokenValidationRespons
 import com.crediticio.auth.authentication.ports.input.AuthInputPort;
 import com.crediticio.auth.authentication.ports.output.PasswordEncoderPort;
 import com.crediticio.auth.authentication.ports.output.TokenProviderPort;
+import com.crediticio.auth.shared.EmailNormalizer;
 import com.crediticio.auth.shared.exception.InvalidCredentialsException;
 import com.crediticio.auth.users.domain.Usuario;
 import com.crediticio.auth.users.ports.output.UserRepositoryPort;
@@ -24,7 +25,7 @@ public class AuthService implements AuthInputPort {
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        Usuario usuario = userRepository.findByEmail(request.getEmail())
+        Usuario usuario = userRepository.findByEmail(EmailNormalizer.normalize(request.getEmail()))
                 .orElseThrow(() -> new InvalidCredentialsException("Credenciales inválidas"));
 
         if (!usuario.isActivo()) {

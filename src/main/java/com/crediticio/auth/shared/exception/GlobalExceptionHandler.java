@@ -25,6 +25,11 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND, "ROL_NOT_FOUND", ex.getMessage());
     }
 
+    @ExceptionHandler(RolNoPermitidoException.class)
+    public ResponseEntity<ApiError> handleRolNoPermitido(RolNoPermitidoException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "ROL_NOT_ALLOWED", ex.getMessage());
+    }
+
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiError> handleDuplicateEmail(DuplicateEmailException ex) {
         return buildResponse(HttpStatus.CONFLICT, "DUPLICATE_EMAIL", ex.getMessage());

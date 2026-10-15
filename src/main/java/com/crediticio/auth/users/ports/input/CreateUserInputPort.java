@@ -5,5 +5,5 @@ import com.crediticio.auth.users.application.dto.UserResponse;
 
 public interface CreateUserInputPort {
 
-    UserResponse createUser(CreateUserRequest request);
+    UserResponse createUser(CreateUserRequest request, String actor);
 }

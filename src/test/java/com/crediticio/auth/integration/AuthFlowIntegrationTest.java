@@ -49,8 +49,8 @@ class AuthFlowIntegrationTest {
         usuarioRepository.deleteAll();
         rolRepository.deleteAll();
 
-        adminRol = rolRepository.save(new RolJpaEntity(null, "ADMIN"));
-        analistaRol = rolRepository.save(new RolJpaEntity(null, "ANALISTA"));
+        adminRol = rolRepository.save(new RolJpaEntity(null, "ADMINISTRADOR_RIESGO"));
+        analistaRol = rolRepository.save(new RolJpaEntity(null, "ANALISTA_CREDITO"));
 
         UsuarioJpaEntity admin = new UsuarioJpaEntity();
         admin.setNombre("Admin Test");
@@ -89,7 +89,7 @@ class AuthFlowIntegrationTest {
                             .content("{\"email\":\"admin@test.com\",\"password\":\"admin123\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.token").isNotEmpty())
-                    .andExpect(jsonPath("$.rol").value("ADMIN"));
+                    .andExpect(jsonPath("$.rol").value("ADMINISTRADOR_RIESGO"));
         }
 
         @Test
@@ -130,11 +130,11 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Nuevo\",\"email\":\"nuevo@test.com\",\"password\":\"password123\",\"idRol\":" + analistaRol.getId() + "}"))
+                            .content("{\"nombre\":\"Nuevo\",\"email\":\"nuevo@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + analistaRol.getId() + "}"))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.nombre").value("Nuevo"))
                     .andExpect(jsonPath("$.email").value("nuevo@test.com"))
-                    .andExpect(jsonPath("$.rolNombre").value("ANALISTA"))
+                    .andExpect(jsonPath("$.rolNombre").value("ANALISTA_CREDITO"))
                     .andExpect(jsonPath("$.activo").value(true))
                     .andExpect(jsonPath("$.passwordHash").doesNotExist());
         }
@@ -146,7 +146,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"password123\",\"idRol\":1}"))
+                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"passwordSegura123\",\"idRol\":1}"))
                     .andExpect(status().isForbidden());
         }
 
@@ -154,7 +154,7 @@ class AuthFlowIntegrationTest {
         void createUser_unauthenticated_returns401() throws Exception {
             mockMvc.perform(post("/api/v1/usuarios")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"password123\",\"idRol\":1}"))
+                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"passwordSegura123\",\"idRol\":1}"))
                     .andExpect(status().isUnauthorized());
         }
 
@@ -165,9 +165,67 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Dup\",\"email\":\"admin@test.com\",\"password\":\"password123\",\"idRol\":" + adminRol.getId() + "}"))
+                            .content("{\"nombre\":\"Dup\",\"email\":\"admin@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + adminRol.getId() + "}"))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.errorCode").value("DUPLICATE_EMAIL"));
+        }
+
+        @Test
+        void createUser_duplicateEmailDifferentCase_returns409() throws Exception {
+            String token = loginAndGetToken("admin@test.com", "admin123");
+
+            mockMvc.perform(post("/api/v1/usuarios")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nombre\":\"Dup\",\"email\":\"ADMIN@Test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + adminRol.getId() + "}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errorCode").value("DUPLICATE_EMAIL"));
+        }
+
+        @Test
+        void createUser_emailIsStoredNormalized_andLoginIsCaseInsensitive() throws Exception {
+            String token = loginAndGetToken("admin@test.com", "admin123");
+
+            mockMvc.perform(post("/api/v1/usuarios")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nombre\":\"Mixto\",\"email\":\"Mixto@Test.COM\",\"password\":\"passwordSegura123\",\"idRol\":" + analistaRol.getId() + "}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.email").value("mixto@test.com"));
+
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"MIXTO@test.com\",\"password\":\"passwordSegura123\"}"))
+                    .andExpect(status().isOk());
+
+            org.junit.jupiter.api.Assertions.assertEquals("admin@test.com",
+                    usuarioRepository.findByEmail("mixto@test.com").orElseThrow().getCreadoPor());
+        }
+
+        @Test
+        void createUser_shortPassword_returns400() throws Exception {
+            String token = loginAndGetToken("admin@test.com", "admin123");
+
+            mockMvc.perform(post("/api/v1/usuarios")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nombre\":\"Corta\",\"email\":\"corta@test.com\",\"password\":\"12345678901\",\"idRol\":" + analistaRol.getId() + "}"))
+                    .andExpect(status().isBadRequest());
+
+            org.junit.jupiter.api.Assertions.assertTrue(usuarioRepository.findByEmail("corta@test.com").isEmpty());
+        }
+
+        @Test
+        void createUser_roleNotAllowed_returns400() throws Exception {
+            RolJpaEntity otro = rolRepository.save(new RolJpaEntity(null, "SUPERUSUARIO"));
+            String token = loginAndGetToken("admin@test.com", "admin123");
+
+            mockMvc.perform(post("/api/v1/usuarios")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nombre\":\"Otro\",\"email\":\"otro@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + otro.getId() + "}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("ROL_NOT_ALLOWED"));
         }
 
         @Test
@@ -412,7 +470,7 @@ class AuthFlowIntegrationTest {
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.token").isNotEmpty())
-                    .andExpect(jsonPath("$.rol").value("ADMIN"));
+                    .andExpect(jsonPath("$.rol").value("ADMINISTRADOR_RIESGO"));
         }
 
         @Test
@@ -429,7 +487,7 @@ class AuthFlowIntegrationTest {
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.email").value("analista@test.com"))
-                    .andExpect(jsonPath("$.rol").value("ANALISTA"))
+                    .andExpect(jsonPath("$.rol").value("ANALISTA_CREDITO"))
                     .andExpect(jsonPath("$.userId").isNumber());
         }
 

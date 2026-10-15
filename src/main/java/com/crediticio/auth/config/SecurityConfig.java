@@ -35,15 +35,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                        // Solo ADMIN
-                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole("ADMIN")
-                        // ADMIN o ANALISTA
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole("ADMIN", "ANALISTA")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").hasAnyRole("ADMIN", "ANALISTA")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole("ADMIN", "ANALISTA")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole("ADMIN", "ANALISTA")
+                        // Solo ADMINISTRADOR_RIESGO
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios").hasRole("ADMINISTRADOR_RIESGO")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios").hasRole("ADMINISTRADOR_RIESGO")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole("ADMINISTRADOR_RIESGO")
+                        // ADMINISTRADOR_RIESGO o ANALISTA_CREDITO
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
                         // Todo lo demás requiere autenticación
                         .anyRequest().authenticated()
                 )

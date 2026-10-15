@@ -16,6 +16,6 @@ public class LoginResponse {
     @Schema(description = "Token JWT firmado", example = "eyJhbGciOiJIUzI1NiIs...")
     private String token;
 
-    @Schema(description = "Rol del usuario autenticado", example = "ADMIN")
+    @Schema(description = "Rol del usuario autenticado", example = "ADMINISTRADOR_RIESGO")
     private String rol;
 }

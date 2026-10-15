@@ -19,6 +19,6 @@ public class TokenValidationResponse {
     @Schema(description = "Email del usuario", example = "admin@crediticio.com")
     private String email;
 
-    @Schema(description = "Rol del usuario", example = "ADMIN")
+    @Schema(description = "Rol del usuario", example = "ADMINISTRADOR_RIESGO")
     private String rol;
 }

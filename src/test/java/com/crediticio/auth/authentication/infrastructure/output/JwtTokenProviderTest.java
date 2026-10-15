@@ -27,7 +27,7 @@ class JwtTokenProviderTest {
 
     @Test
     void generateToken_createsValidToken() {
-        String token = tokenProvider.generateToken("juan@test.com", "ADMIN");
+        String token = tokenProvider.generateToken("juan@test.com", "ADMINISTRADOR_RIESGO");
 
         assertNotNull(token);
         assertTrue(tokenProvider.isTokenValid(token));
@@ -35,23 +35,23 @@ class JwtTokenProviderTest {
 
     @Test
     void getEmailFromToken_returnsCorrectEmail() {
-        String token = tokenProvider.generateToken("juan@test.com", "ADMIN");
+        String token = tokenProvider.generateToken("juan@test.com", "ADMINISTRADOR_RIESGO");
 
         assertEquals("juan@test.com", tokenProvider.getEmailFromToken(token));
     }
 
     @Test
     void getRolFromToken_returnsCorrectRol() {
-        String token = tokenProvider.generateToken("juan@test.com", "ANALISTA");
+        String token = tokenProvider.generateToken("juan@test.com", "ANALISTA_CREDITO");
 
-        assertEquals("ANALISTA", tokenProvider.getRolFromToken(token));
+        assertEquals("ANALISTA_CREDITO", tokenProvider.getRolFromToken(token));
     }
 
     @Test
     void isTokenValid_expiredToken_returnsFalse() {
         String expiredToken = Jwts.builder()
                 .subject("juan@test.com")
-                .claim("rol", "ADMIN")
+                .claim("rol", "ADMINISTRADOR_RIESGO")
                 .issuedAt(new Date(System.currentTimeMillis() - 10000))
                 .expiration(new Date(System.currentTimeMillis() - 5000))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
@@ -74,7 +74,7 @@ class JwtTokenProviderTest {
     void isTokenValid_wrongSecret_returnsFalse() {
         String tokenWithDifferentKey = Jwts.builder()
                 .subject("juan@test.com")
-                .claim("rol", "ADMIN")
+                .claim("rol", "ADMINISTRADOR_RIESGO")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 60000))
                 .signWith(Keys.hmacShaKeyFor("another-secret-key-that-is-at-least-256-bits-long-for-hmac!!".getBytes(StandardCharsets.UTF_8)))
