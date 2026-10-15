@@ -113,14 +113,17 @@ Este documento analiza como el backend aborda cada categoria del OWASP Top 10 (2
 - BCrypt con factor de costo por defecto (10) para hashing de contrasenas.
 - Validacion de contrasena de 12 a 72 caracteres (`@Size(min = 12, max = 72)`; 72 es el limite de BCrypt).
 - Correo normalizado y unicidad por indice `lower(email)`; sin credenciales sembradas en migraciones (primer administrador por variables de entorno).
-- Token JWT con expiracion configurable (default 1 hora).
+- Access token JWT de 15 minutos con `iss`/`aud`/`jti`; la app no arranca si se configura una vigencia mayor o un secreto de menos de 32 caracteres.
+- Refresh tokens opacos, de un solo uso, persistidos solo como hash SHA-256, con rotacion atomica y deteccion de reutilizacion que revoca la sesion.
+- Login con respuesta unica 401 y comparacion de hash aun si el usuario no existe (sin enumeracion por mensaje ni por tiempo).
 - Usuarios inactivos (`activo = false`) no pueden autenticarse — `AuthService.login()` verifica el estado.
 - Endpoint `/validate` consulta el estado actual del usuario en BD, no solo el token.
 
 **Mitigaciones adicionales recomendadas:**
 - Implementar bloqueo de cuenta tras N intentos fallidos.
 - Agregar requisitos de complejidad de contrasena (mayusculas, numeros, caracteres especiales).
-- Considerar refresh token con rotacion (el refresh actual reemite el mismo token sin rotacion).
+- Limitar la tasa de intentos de login y de renovacion (pendiente; ver HU de robustez F6.4).
+- Purga programada de refresh tokens vencidos (hoy permanecen en la tabla).
 
 ---
 

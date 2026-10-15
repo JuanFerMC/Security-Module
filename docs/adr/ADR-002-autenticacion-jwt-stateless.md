@@ -24,7 +24,7 @@ Adoptamos **JWT stateless** con la librería `jjwt` (io.jsonwebtoken).
 
 - El token contiene: `sub` (email), `rol`, `iat`, `exp`.
 - La clave secreta (`JWT_SECRET`) se comparte entre Auth y Motor de Scoring vía variable de entorno.
-- Expiración configurable (`JWT_EXPIRATION_MS`, default 1 hora).
+- Expiración configurable (`JWT_EXPIRATION_MS`, default y máximo 15 minutos desde HU09; ver ADR-005).
 - El token viaja en el header `Authorization: Bearer <token>`.
 - La emisión y validación están aisladas detrás de `TokenProviderPort`, permitiendo cambiar la implementación sin afectar el dominio.
 

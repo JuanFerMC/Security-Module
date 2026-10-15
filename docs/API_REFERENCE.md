@@ -15,16 +15,16 @@ Todos los endpoints protegidos requieren el header:
 Authorization: Bearer <token>
 ```
 
-El token se obtiene con `POST /auth/login` y tiene una expiracion configurable (default: 1 hora). Para renovarlo antes de que expire, usar `POST /auth/refresh`.
+Al iniciar sesion (`POST /auth/login`) se reciben **dos tokens**: un *access token* JWT de **15 minutos** que se envia en cada peticion, y un *refresh token* opaco de **un solo uso** (maximo 7 dias) que sirve unicamente para obtener un par nuevo con `POST /auth/refresh` o cerrar la sesion con `POST /auth/logout`.
 
 ### Flujo recomendado en el frontend
 
-1. **Login:** `POST /auth/login` con email y contrasena → guardar el `token` (en memoria o `localStorage`).
+1. **Login:** `POST /auth/login` con email y contrasena → guardar `token` (access) y `refreshToken`. Preferir memoria para el access token; tratar el refresh token como un secreto.
 2. **Peticiones:** incluir `Authorization: Bearer <token>` en cada request a Auth y Motor de Scoring.
-3. **Refresh:** antes de que expire, llamar `POST /auth/refresh` con el token actual → reemplazar con el nuevo.
-4. **Logout:** eliminar el token del almacenamiento del cliente (no hay endpoint de logout; el token expira solo).
-5. **Errores 401:** redirigir al login. El token expiro o es invalido.
-6. **Errores 403:** mostrar mensaje de permisos insuficientes. El usuario esta autenticado pero no tiene el rol requerido.
+3. **Renovar:** cuando el access token venza (401) o falten pocos segundos (`expiresIn`), llamar `POST /auth/refresh` con `{ "refreshToken": "<ultimo>" }` y **reemplazar ambos tokens**. El refresh token anterior deja de servir.
+4. **No reutilizar:** nunca reenviar un refresh token ya canjeado ni disparar dos renovaciones a la vez con el mismo: la segunda se interpreta como reutilizacion y **revoca la sesion**.
+5. **Logout:** `POST /auth/logout` con el refresh token y descartar ambos tokens.
+6. **Errores 401** en refresh: redirigir al login. **403:** el usuario no tiene el rol requerido.
 
 ---
 
@@ -32,7 +32,7 @@ El token se obtiene con `POST /auth/login` y tiene una expiracion configurable (
 
 ### POST /auth/login
 
-Autentica un usuario con email y contrasena. Retorna un JWT firmado y el rol.
+Autentica un usuario con email y contrasena. Retorna un access token JWT (15 minutos), un refresh token y el rol.
 
 **Acceso:** Publico (no requiere token)
 
@@ -41,13 +41,13 @@ Autentica un usuario con email y contrasena. Retorna un JWT firmado y el rol.
 ```json
 {
   "email": "admin@crediticio.com",
-  "password": "Admin123!"
+  "password": "ClaveSegura2026!"
 }
 ```
 
 | Campo | Tipo | Validacion |
 |---|---|---|
-| `email` | string | Requerido, formato email valido |
+| `email` | string | Requerido, formato email valido (no distingue mayusculas) |
 | `password` | string | Requerido, no vacio |
 
 **Response 200:**
@@ -55,51 +55,76 @@ Autentica un usuario con email y contrasena. Retorna un JWT firmado y el rol.
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "q3k2Vf0o1xk3wH...",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
   "rol": "ADMINISTRADOR_RIESGO"
 }
 ```
 
 | Campo | Tipo | Descripcion |
 |---|---|---|
-| `token` | string | JWT firmado. Incluir como `Bearer <token>` en peticiones protegidas |
+| `token` | string | Access token JWT. Incluir como `Bearer <token>` en peticiones protegidas |
+| `refreshToken` | string | Refresh token opaco de un solo uso (maximo 7 dias) |
+| `tokenType` | string | Siempre `Bearer` |
+| `expiresIn` | number | Segundos de vigencia del access token (900) |
 | `rol` | string | `ADMINISTRADOR_RIESGO` o `ANALISTA_CREDITO` |
+
+Claims del access token: `sub` (id de usuario), `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`.
 
 **Errores:**
 
 | HTTP | errorCode | Causa |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Email vacio, formato invalido, password vacio |
-| 401 | `INVALID_CREDENTIALS` | Email no registrado, contrasena incorrecta, o usuario desactivado |
+| 401 | `INVALID_CREDENTIALS` | Credenciales invalidas. **No se indica cual fallo** (usuario inexistente, contrasena incorrecta o usuario desactivado responden igual) |
 
 ---
 
 ### POST /auth/refresh
 
-Emite un nuevo JWT a partir de un token valido no expirado. El token anterior sigue siendo valido hasta su expiracion.
+Canjea un refresh token valido por un **nuevo access token y un nuevo refresh token** (rotacion). El refresh token usado queda invalidado en la misma operacion.
 
-**Acceso:** ADMINISTRADOR_RIESGO, ANALISTA_CREDITO
+**Acceso:** Publico. No requiere `Authorization`; se autentica con el refresh token (el access token puede haber vencido).
 
 **Request:**
 
-```
-Header: Authorization: Bearer <token_actual>
-Body: (vacio)
-```
-
-**Response 200:**
-
 ```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "rol": "ADMINISTRADOR_RIESGO"
-}
+{ "refreshToken": "q3k2Vf0o1xk3wH..." }
 ```
+
+**Response 200:** igual que `POST /auth/login` (nuevos `token` y `refreshToken`).
 
 **Errores:**
 
 | HTTP | errorCode | Causa |
 |---|---|---|
-| 401 | `UNAUTHORIZED` | Sin token o token invalido/expirado |
+| 400 | `VALIDATION_ERROR` | `refreshToken` ausente o vacio |
+| 401 | `INVALID_CREDENTIALS` | Refresh token desconocido, vencido, revocado, ya usado, o usuario desactivado. El mensaje no distingue la causa |
+
+**Reutilizacion:** presentar un refresh token que ya fue rotado revoca **toda la sesion** (incluido el token vigente de esa sesion); el usuario debe iniciar sesion de nuevo. Dos renovaciones simultaneas con el mismo token: solo una tiene exito.
+
+---
+
+### POST /auth/logout
+
+Invalida la sesion (todos los refresh tokens de esa sesion). Idempotente: un token desconocido o ya cerrado tambien responde 204.
+
+**Acceso:** Publico (se autentica con el refresh token).
+
+**Request:**
+
+```json
+{ "refreshToken": "q3k2Vf0o1xk3wH..." }
+```
+
+**Response 204:** sin cuerpo.
+
+| HTTP | errorCode | Causa |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `refreshToken` ausente o vacio |
+
+> El access token ya emitido sigue siendo valido hasta su vencimiento (maximo 15 minutos); no hay lista de revocacion de access tokens.
 
 ---
 
@@ -429,7 +454,7 @@ Cuando un ADMINISTRADOR_RIESGO desactiva un usuario (`PATCH /usuarios/{id}/estad
 
 - **Tokens existentes quedan invalidos inmediatamente.** El filtro JWT verifica el estado `activo` en BD en cada peticion.
 - **Login rechazado.** `POST /auth/login` retorna 401 con `INVALID_CREDENTIALS`.
-- **Refresh rechazado.** `POST /auth/refresh` retorna 401.
+- **Refresh rechazado.** `POST /auth/refresh` retorna 401 y la sesion se revoca.
 - **Validate rechazado.** `GET /auth/validate` retorna 401.
 
 El frontend debe manejar un 401 inesperado como sesion terminada y redirigir al login.
@@ -491,11 +516,21 @@ async function changeMyPassword(userId, currentPassword, newPassword) {
   await api.patch(`/usuarios/${userId}/password`, { currentPassword, newPassword });
 }
 
-// Refresh token
-async function refreshToken() {
-  const { data } = await api.post('/auth/refresh');
-  localStorage.setItem('token', data.token);
+// Renovar sesion: reemplazar AMBOS tokens; el refresh token anterior ya no sirve
+async function renewSession() {
+  const { data } = await api.post('/auth/refresh', {
+    refreshToken: sessionStorage.getItem('refreshToken'),
+  });
+  sessionStorage.setItem('token', data.token);
+  sessionStorage.setItem('refreshToken', data.refreshToken);
   return data;
+}
+
+// Cerrar sesion
+async function logout() {
+  await api.post('/auth/logout', { refreshToken: sessionStorage.getItem('refreshToken') });
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('refreshToken');
 }
 ```
 

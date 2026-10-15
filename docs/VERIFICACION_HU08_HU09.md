@@ -114,3 +114,33 @@ Decisiones tomadas: roles de la HU (`ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`) 
 
 **Pendiente de HU08:** nada funcional. Queda decidir si se documenta en un contrato versionado para Motor de Scoring/frontend el cambio de nombres de rol.
 **Sin tocar (HU09):** todo lo marcado ❌/🟡 de la seccion HU09 sigue pendiente.
+
+---
+
+## Actualizacion: HU09 implementada (rama `feat/HU09-autenticar-usuario`)
+
+Detalle de diseno en `docs/adr/ADR-005-hu09-sesion-refresh-token-rotacion.md`.
+
+| RF/RNF | Estado | Como se resolvio |
+|---|---|---|
+| RF01 Autenticar credenciales | ✅ | `POST /auth/login`, correo normalizado |
+| RF02 401 sin revelar causa | ✅ | Mensaje unico; hash evaluado aun si el usuario no existe (sin enumeracion por tiempo) |
+| RF03 Access token 15 min | ✅ | `JWT_EXPIRATION_MS` default y maximo 900000; falla el arranque si se supera |
+| RF04 Claims id, rol, iat, exp, iss, aud | ✅ | `sub` = id, `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti` |
+| RF05 Validar firma/exp/iss/aud | ✅ | `requireIssuer`/`requireAudience` en el parser |
+| RF06 Refresh token (<= 7 dias) | ✅ | Opaco de 256 bits; `JWT_REFRESH_EXPIRATION_DAYS` maximo 7 |
+| RF07 Refresh protegido | ✅ | Solo `SHA-256` en `refresh_tokens` |
+| RF08 Renovar con refresh valido | ✅ | `POST /auth/refresh` |
+| RF09 Rotacion atomica | ✅ | Canje y emision en una transaccion |
+| RF10 Reutilizacion | ✅ | Revoca toda la familia (se confirma pese a la excepcion) |
+| RF11 Logout | ✅ | `POST /auth/logout`, idempotente |
+| RF12 Concurrencia | ✅ | `UPDATE` condicional; 8 simultaneas → 1 exitosa (H2 y PostgreSQL) |
+| RF13 401 | ✅ | Vencido, revocado, usado o invalido → 401 |
+| RF14/RF15 | ✅ | Sin secretos en respuestas; rol y estado tomados de la BD |
+| RNF01 Secretos | ✅ | `JWT_SECRET` >= 32 caracteres validado al arrancar |
+| RNF02 Vigencias | ✅ | Limites aplicados en configuracion |
+| RNF03 Consistencia | ✅ | Rotacion y revocacion persistidas atomicamente |
+| RNF04/RNF05 Logs y trazabilidad | ✅ | Eventos de login, fallo, renovacion, reutilizacion y logout sin tokens ni credenciales |
+| RNF06 Errores | ✅ | Mensajes uniformes |
+
+**Pendientes (fuera de la HU):** purga de tokens vencidos, limitacion de tasa en login/renovacion y revocar sesiones al cambiar la contrasena (hoy el refresh ya falla si el usuario esta inactivo).
