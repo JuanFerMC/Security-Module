@@ -2,6 +2,19 @@
 
 Bitacora de ajustes necesarios para ejecutar el backend de autenticacion contra la base compartida `db_scoring`. Cada entrada indica sintoma, causa, solucion y como verificar. Todo ajuste de configuracion nuevo debe agregarse aqui.
 
+## 2026-10-14 — Correccion de errores HTTP y codificacion (revalidacion HU08/HU09)
+
+Rama `fix/HU08-HU09-errores-http-y-codificacion`. Hallazgos en `docs/REVALIDACION_HU08_HU09.md`.
+
+- **H1 (400 en vez de 401):** `/error` se permite en `SecurityConfig`; nuevos manejadores para JSON mal formado (`MALFORMED_REQUEST`) y tipos invalidos (`INVALID_PARAMETER`).
+- **H2 (acentos corruptos):** las respuestas 401/403 escritas en `SecurityConfig` ahora salen en UTF-8.
+- **H3 (idRol inexistente):** pasa de 404 a **400** (`ROL_NOT_FOUND`), como pide HU08 RF13. **Cambio de contrato** para el frontend.
+- **H4 (refresh invalido):** token ausente, vacio o de mas de 512 caracteres responde **401** (antes 400). `logout` con esos valores responde 204. **Cambio de contrato.**
+- **H6:** el hash de relleno del login se calcula al arrancar.
+- **Observacion:** el algoritmo de firma depende de la longitud del secreto (HS512 con 64 caracteres); la documentacion decia HS256 y se corrigio.
+- **Verificacion:** 112 pruebas (14 nuevas), de las cuales 11 de las 12 de servidor real fallan sin el arreglo; flujo comprobado contra Tomcat y PostgreSQL reales.
+- **Pendiente (H5):** la migracion V105 conserva la credencial del admin semilla en un comentario y en el historial de git; no se puede reescribir. Tratarla como comprometida.
+
 ## 2026-10-14 — HU09: autenticacion con refresh tokens
 
 Cambios de configuracion/arranque que introduce HU09 (rama `feat/HU09-autenticar-usuario`).

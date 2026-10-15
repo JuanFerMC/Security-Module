@@ -10,7 +10,7 @@ HU09 exige access token de 15 minutos con emisor y audiencia, refresh token de h
 
 ## Decision
 
-1. **Access token:** JWT HS256 de 15 minutos. `sub` = id de usuario; claims `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`. El filtro valida firma, vigencia, emisor y audiencia, y **toma identidad y rol de la BD** (no del claim).
+1. **Access token:** JWT firmado con HMAC (HS256/HS384/HS512 segun la longitud del secreto; con un secreto de 64 caracteres jjwt usa HS512) de 15 minutos. `sub` = id de usuario; claims `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`. El filtro valida firma, vigencia, emisor y audiencia, y **toma identidad y rol de la BD** (no del claim).
 2. **Refresh token:** 32 bytes aleatorios (`SecureRandom`) en Base64URL, opaco. Se persiste solo `SHA-256(token)` en `refresh_tokens`. El hash rapido es adecuado porque el token tiene 256 bits de entropia (no es una contrasena elegida por una persona).
 3. **Familias:** cada login crea una familia (`familia_id`); cada rotacion emite un token nuevo en la misma familia.
 4. **Rotacion y concurrencia:** el canje es un `UPDATE ... SET usado_en = ahora WHERE id = ? AND usado_en IS NULL AND revocado_en IS NULL`; la BD serializa la fila y solo una peticion actualiza 1 fila. La perdedora se trata como reutilizacion.
@@ -32,4 +32,5 @@ HU09 exige access token de 15 minutos con emisor y audiencia, refresh token de h
 - El rol del JWT sigue usando `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO` (ADR-004). El `sub` ya no es el correo: el Motor de Scoring que decodifique el token debe leer `email` o usar `GET /auth/validate`.
 - El Motor de Scoring, si valida de forma autonoma, debe verificar `iss` y `aud` con los mismos valores (`JWT_ISSUER`, `JWT_AUDIENCE`).
 - Los access tokens ya emitidos de la version anterior (sin `iss`/`aud`) dejan de ser validos al desplegar.
+- Un refresh token ausente, vacio o de longitud imposible responde 401 (no 400), como exige HU09 RF13. Solo un cuerpo que no es JSON valido responde 400.
 - Pendiente: purga de tokens vencidos, limitacion de tasa en login/renovacion y revocar sesiones al cambiar la contrasena.

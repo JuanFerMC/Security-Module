@@ -206,6 +206,9 @@ No se deben aplicar patrones adicionales sin justificación explícita.
 * **Sesión (HU09):** access token JWT de 15 min (`sub` = id de usuario, `iss`, `aud`); refresh token opaco de un solo uso, de máx. 7 días, persistido solo como hash SHA-256 (`refresh_tokens`). Cada renovación lo rota; reutilizar uno ya rotado revoca toda la familia. La app no arranca con vigencias superiores ni con `JWT_SECRET` < 32 caracteres.
 * **Nunca** registrar ni devolver refresh tokens, hashes ni claves en logs, errores o respuestas (excepto el refresh token recién emitido en login/refresh).
 * **Autorización:** el rol efectivo se lee de la BD por el id del `sub`; no se confía en el claim `rol`.
+* **Errores HTTP (HU08 RF13 / HU09 RNF06):** entradas inválidas → 400 (incluido `idRol` inexistente, JSON mal formado y tipos incorrectos); sin autenticación → 401; sin permiso → 403. Un refresh token inválido (ausente, vacío, demasiado largo, vencido, usado o revocado) → siempre 401.
+* `SecurityConfig` debe permitir `/error`; si no, los errores de entrada se convierten en 401. Las respuestas escritas a mano (401/403) deben fijar `UTF-8`.
+* **Pruebas de errores HTTP:** MockMvc no reproduce el despacho de errores ni la codificación real del contenedor; todo cambio en manejo de errores o seguridad debe probarse también con servidor real (`HttpErrorHandlingIntegrationTest`).
 * `spring.jpa.hibernate.ddl-auto` no debe usarse para gestionar el esquema en producción. En el perfil `test` puede usarse `create-drop` sobre H2 con Flyway deshabilitado.
 
 ## 11. Modelo de datos: tablas de este backend

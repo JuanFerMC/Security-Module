@@ -99,8 +99,8 @@ Canjea un refresh token valido por un **nuevo access token y un nuevo refresh to
 
 | HTTP | errorCode | Causa |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `refreshToken` ausente o vacio |
-| 401 | `INVALID_CREDENTIALS` | Refresh token desconocido, vencido, revocado, ya usado, o usuario desactivado. El mensaje no distingue la causa |
+| 400 | `MALFORMED_REQUEST` | El cuerpo no es JSON valido |
+| 401 | `INVALID_CREDENTIALS` | Refresh token ausente, vacio, de longitud imposible (> 512), desconocido, vencido, revocado, ya usado, o usuario desactivado. El mensaje no distingue la causa |
 
 **Reutilizacion:** presentar un refresh token que ya fue rotado revoca **toda la sesion** (incluido el token vigente de esa sesion); el usuario debe iniciar sesion de nuevo. Dos renovaciones simultaneas con el mismo token: solo una tiene exito.
 
@@ -122,7 +122,7 @@ Invalida la sesion (todos los refresh tokens de esa sesion). Idempotente: un tok
 
 | HTTP | errorCode | Causa |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `refreshToken` ausente o vacio |
+| 400 | `MALFORMED_REQUEST` | El cuerpo no es JSON valido |
 
 > El access token ya emitido sigue siendo valido hasta su vencimiento (maximo 15 minutos); no hay lista de revocacion de access tokens.
 
@@ -215,7 +215,8 @@ Crea un nuevo usuario con un rol asignado. La contrasena se almacena como hash B
 | 400 | `ROL_NOT_ALLOWED` | El rol resuelto no es `ADMINISTRADOR_RIESGO` ni `ANALISTA_CREDITO` |
 | 401 | `UNAUTHORIZED` | Sin token |
 | 403 | `ACCESS_DENIED` | El usuario no es ADMINISTRADOR_RIESGO |
-| 404 | `ROL_NOT_FOUND` | El `idRol` no existe en la tabla roles |
+| 400 | `ROL_NOT_FOUND` | El `idRol` no existe en la tabla roles (entrada invalida) |
+| 400 | `MALFORMED_REQUEST` | Cuerpo que no es JSON valido o con un tipo incorrecto (por ejemplo `idRol` como texto) |
 | 409 | `DUPLICATE_EMAIL` | Ya existe un usuario con ese email |
 
 ---
@@ -404,7 +405,7 @@ Todas las respuestas de error usan el mismo formato:
   "message": "Error de validacion en los datos de entrada",
   "details": {
     "email": "must not be blank",
-    "password": "size must be between 8 and 2147483647"
+    "password": "size must be between 12 and 72"
   },
   "traceId": "550e8400-e29b-41d4-a716-446655440000",
   "timestamp": "2026-10-07T14:30:00"
@@ -421,6 +422,8 @@ Todas las respuestas de error usan el mismo formato:
 
 ### Catalogo de codigos de error
 
+> Todas las respuestas de error (incluidas 401 y 403) se envian como `application/json;charset=UTF-8`. Un cuerpo que no es JSON valido responde 400 `MALFORMED_REQUEST`, nunca 401.
+
 | errorCode | HTTP | Descripcion |
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | Datos de entrada invalidos. Ver `details` para errores por campo |
@@ -428,7 +431,9 @@ Todas las respuestas de error usan el mismo formato:
 | `INVALID_CREDENTIALS` | 401 | Email/contrasena incorrectos, usuario inactivo, o contrasena actual incorrecta en cambio de contrasena |
 | `ACCESS_DENIED` | 403 | El rol del usuario no tiene permiso para este endpoint |
 | `USER_NOT_FOUND` | 404 | No existe usuario con el ID proporcionado |
-| `ROL_NOT_FOUND` | 404 | No existe rol con el ID proporcionado |
+| `ROL_NOT_FOUND` | 400 | El `idRol` enviado no existe |
+| `MALFORMED_REQUEST` | 400 | Cuerpo de la peticion que no es JSON valido o con tipos incorrectos |
+| `INVALID_PARAMETER` | 400 | Parametro de ruta o de consulta con un tipo invalido (por ejemplo `/usuarios/abc`) |
 | `DUPLICATE_EMAIL` | 409 | Ya existe un usuario registrado con ese email |
 
 ---
