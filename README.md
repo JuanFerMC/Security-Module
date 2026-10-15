@@ -205,6 +205,8 @@ El Dockerfile usa multi-stage build (JDK 21 para compilar, JRE 21 Alpine para ej
 
 Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer para autenticacion con JWT. Cada endpoint esta documentado con `@Operation`, `@ApiResponse` y `@Schema` en los DTOs.
 
+> **Para el frontend:** la guia de integracion (flujo de sesion, renovacion de tokens, errores, roles y ejemplo de cliente) esta en [`docs/INTEGRACION_FRONTEND.md`](docs/INTEGRACION_FRONTEND.md).
+
 ## Endpoints
 
 ### Autenticacion (`/api/v1/auth`)
