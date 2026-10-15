@@ -86,6 +86,9 @@ com.crediticio.auth/
 | `JWT_EXPIRATION_MS` | Expiracion del token en ms | `3600000` (1 hora) |
 | `CORS_ALLOWED_ORIGINS` | Origenes permitidos (separados por coma) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` |
+| `INIT_ADMIN_EMAIL` | Correo del primer administrador (solo primer arranque) | — |
+| `INIT_ADMIN_PASSWORD` | Contrasena del primer administrador, min. 12 caracteres (solo primer arranque) | — |
+| `INIT_ADMIN_NOMBRE` | Nombre del primer administrador | `Administrador` |
 
 Hay una plantilla en [`.env.example`](.env.example).
 
@@ -165,6 +168,8 @@ Lista de verificacion antes de desplegar:
 | Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
 | Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
 | Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
+| Advertencia "No existe ningun ADMINISTRADOR_RIESGO" / nadie puede crear usuarios | Primer arranque sin `INIT_ADMIN_EMAIL`/`INIT_ADMIN_PASSWORD` (o V106 elimino el seed) | Definir las dos variables y reiniciar; ver "Primer administrador" |
+| Arranque falla con "INIT_ADMIN_PASSWORD no cumple la politica" | Contrasena inicial de menos de 12 caracteres | Usar 12 o mas |
 | `cannot find symbol ... getId()/getRol()` al compilar | Se compila con JDK 24+: Lombok 1.18.34 (el de Spring Boot 3.3.5) no lo soporta | Usar JDK 21. Con `JAVA_HOME` apuntando a JDK 21 |
 | `ClassFormatError: Invalid method Code length 0` al arrancar | Clases en `target/` corruptas por una compilacion previa fallida o incremental con Lombok | `.\mvnw.cmd clean spring-boot:run` |
 | `Validate failed: Detected applied migration not resolved locally: 1` | La BD compartida tiene migraciones V1-V99 del Motor de Scoring | Ya resuelto en `application.yml` (`ignore-migration-patterns: "*:missing"`). Si aparece, actualizar la rama |
@@ -200,22 +205,22 @@ Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer
 | Metodo | Ruta | Descripcion | Acceso |
 |---|---|---|---|
 | `POST` | `/login` | Login con email y contrasena → JWT + rol | Publico |
-| `POST` | `/refresh` | Renueva un token valido | ADMIN, ANALISTA |
-| `GET` | `/validate` | Valida token y retorna identidad + rol | ADMIN, ANALISTA |
+| `POST` | `/refresh` | Renueva un token valido | ADMINISTRADOR_RIESGO, ANALISTA_CREDITO |
+| `GET` | `/validate` | Valida token y retorna identidad + rol | ADMINISTRADOR_RIESGO, ANALISTA_CREDITO |
 
 ### Usuarios (`/api/v1/usuarios`)
 
 | Metodo | Ruta | Descripcion | Acceso |
 |---|---|---|---|
-| `POST` | `/` | Crea usuario con rol asignado | ADMIN |
-| `GET` | `/` | Lista todos los usuarios | ADMIN |
-| `GET` | `/{id}` | Detalle de un usuario | ADMIN (cualquiera), ANALISTA (solo propio) |
-| `PATCH` | `/{id}/estado` | Activa o desactiva un usuario | ADMIN |
-| `PATCH` | `/{id}/password` | Cambia la contrasena de un usuario | ADMIN (reset), ANALISTA (solo propia, requiere contrasena actual) |
+| `POST` | `/` | Crea usuario con rol asignado | ADMINISTRADOR_RIESGO |
+| `GET` | `/` | Lista todos los usuarios | ADMINISTRADOR_RIESGO |
+| `GET` | `/{id}` | Detalle de un usuario | ADMINISTRADOR_RIESGO (cualquiera), ANALISTA_CREDITO (solo propio) |
+| `PATCH` | `/{id}/estado` | Activa o desactiva un usuario | ADMINISTRADOR_RIESGO |
+| `PATCH` | `/{id}/password` | Cambia la contrasena de un usuario | ADMINISTRADOR_RIESGO (reset), ANALISTA_CREDITO (solo propia, requiere contrasena actual) |
 
 ### Matriz RBAC
 
-| Endpoint | ADMIN | ANALISTA | Publico |
+| Endpoint | ADMINISTRADOR_RIESGO | ANALISTA_CREDITO | Publico |
 |---|---|---|---|
 | `POST /auth/login` | — | — | Si |
 | `POST /auth/refresh` | Si | Si | — |
@@ -249,7 +254,7 @@ Todas las respuestas de error siguen el formato `ApiError`:
 | `id_rol` | SERIAL | PK |
 | `nombre` | VARCHAR(50) | UNIQUE NOT NULL |
 
-Seed: `ADMIN`, `ANALISTA`.
+Seed: `ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`.
 
 ### `usuarios`
 
@@ -283,7 +288,8 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 | `V102` | Indices en `id_rol` (FK) y `activo` |
 | `V103` | Tablas de auditoria Envers (`revinfo`, `usuarios_aud`, `roles_aud`) |
 | `V104` | Procedimiento almacenado `sp_resumen_usuarios_por_rol()` |
-| `V105` | Seed del usuario administrador inicial |
+| `V105` | Seed del usuario administrador inicial (retirado por V106) |
+| `V106` | HU08: roles `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO`, correo normalizado + indice unico `lower(email)`, columna `creado_por`, retiro del seed con credencial publica |
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
 
@@ -291,18 +297,36 @@ Como ambos backends comparten `flyway_schema_history`, este backend tiene config
 
 Los ids (`id_rol`, `id_usuario`) son `SERIAL` (INTEGER) en BD y `Long` en Java; las entidades JPA usan `@JdbcTypeCode(SqlTypes.INTEGER)` para que `ddl-auto: validate` los acepte. No cambiar el tipo de la columna sin una nueva migracion.
 
-### Usuario administrador inicial (seed)
+### Primer administrador (inicializacion controlada)
 
-La migracion `V105` crea un usuario administrador para resolver el problema chicken-and-egg (el endpoint de crear usuarios requiere rol ADMIN, pero no existe ningun ADMIN inicial).
+El endpoint de crear usuarios requiere rol `ADMINISTRADOR_RIESGO`, por lo que el primer administrador se crea **fuera de la API publica**, al arrancar la aplicacion (HU08 RF09/RF10):
 
-| Campo | Valor |
+1. Definir en el entorno del proceso (nunca en el repositorio):
+
+   | Variable | Descripcion |
+   |---|---|
+   | `INIT_ADMIN_EMAIL` | Correo del primer administrador (se normaliza a minusculas) |
+   | `INIT_ADMIN_PASSWORD` | Contrasena, **minimo 12 caracteres** |
+   | `INIT_ADMIN_NOMBRE` | Opcional. Por defecto `Administrador` |
+
+2. Arrancar la aplicacion. Si **no existe ningun** usuario con rol `ADMINISTRADOR_RIESGO`, se crea uno con esos datos (queda `creado_por = BOOTSTRAP`).
+3. Cuando ya existe un administrador, la inicializacion **se ignora sola** (queda deshabilitada); conviene retirar las dos variables del entorno.
+
+Notas:
+- No existe endpoint publico para esto, y la contrasena nunca se escribe en logs.
+- Si no hay administrador y no hay variables, la aplicacion arranca igual pero registra una advertencia: nadie podra crear usuarios hasta inicializarlo.
+- La migracion `V106` elimina el antiguo usuario semilla `admin@crediticio.com` **solo si conserva la contrasena publica original**. Si alguien ya cambio su contrasena, no se toca.
+- Antes de V106 el README publicaba una contrasena fija; en cualquier entorno donde V105 haya corrido y V106 no, esa credencial es publica y debe considerarse comprometida.
+
+### Politica de usuarios y contrasenas (HU08)
+
+| Regla | Detalle |
 |---|---|
-| Nombre | Administrador |
-| Email | `admin@crediticio.com` |
-| Contrasena | `Admin2026!` |
-| Rol | ADMIN |
-
-**Importante:** cambiar esta contrasena inmediatamente despues del primer login usando `PATCH /api/v1/usuarios/{id}/password`.
+| Roles permitidos | Solo `ADMINISTRADOR_RIESGO` y `ANALISTA_CREDITO`; otro rol responde 400 `ROL_NOT_ALLOWED` |
+| Correo | Obligatorio, formato valido, se guarda en minusculas; unico sin distinguir mayusculas (indice unico en BD) |
+| Contrasena | 12 a 72 caracteres (limite de BCrypt), hash BCrypt |
+| Duplicado | 409 `DUPLICATE_EMAIL`, sin crear usuario parcial (tambien ante carreras entre peticiones) |
+| Trazabilidad | `fecha_creacion` y `creado_por` (correo del administrador que creo el usuario) |
 
 ### Procedimiento almacenado
 
@@ -336,8 +360,8 @@ Consulta no trivial con `LEFT JOIN`, `GROUP BY` y `FILTER` condicional.
 
 - **Contrasenas:** hash BCrypt, nunca en texto plano. `password_hash` nunca se expone en respuestas.
 - **JWT:** firmado con HMAC-SHA256, clave via variable de entorno, expiracion configurable.
-- **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA en perfil y contrasena.
-- **Cambio de contrasena:** ANALISTA debe verificar contrasena actual; ADMIN puede hacer reset.
+- **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA_CREDITO en perfil y contrasena.
+- **Cambio de contrasena:** ANALISTA_CREDITO debe verificar contrasena actual; ADMINISTRADOR_RIESGO puede hacer reset.
 - **Revocacion de acceso:** al desactivar un usuario, cualquier token existente queda inutilizado. El filtro JWT verifica el estado `activo` en BD en cada peticion.
 - **CORS:** origenes explicitos configurables, no `*`.
 - **Auditoria:** Hibernate Envers registra cada cambio con timestamp y usuario responsable.
@@ -370,7 +394,7 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 | `AuthFlowIntegrationTest` | Integracion | 25 | Login, CRUD, RBAC, cambio contrasena, tokens, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 58 tests** (verificado con `mvnw clean test` en JDK 21).
+**Total: 70 tests** (verificado con `mvnw clean test` en JDK 21).
 
 ## Decisiones arquitectonicas (ADR)
 
