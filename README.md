@@ -67,9 +67,11 @@ com.crediticio.auth/
 
 ## Requisitos previos
 
-- JDK 21
-- PostgreSQL con la base de datos `db_scoring` creada
+- JDK 21 (el proyecto compila con `java.version=21`)
+- PostgreSQL con la base de datos `db_scoring` **ya creada** y un usuario con permiso para crear tablas (Flyway crea las tablas, no la base)
 - Docker (opcional, para ejecucion en contenedor)
+
+> **Si la aplicacion no arranca**, casi siempre es una de estas tres: falta `JWT_SECRET`, falta `SPRING_DATASOURCE_PASSWORD` o el usuario/base de datos no existen. Ver [Primer arranque](#primer-arranque-paso-a-paso) y [Problemas comunes](#problemas-comunes-al-arrancar).
 
 ## Configuracion
 
@@ -79,29 +81,90 @@ com.crediticio.auth/
 |---|---|---|
 | `SPRING_DATASOURCE_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/db_scoring` |
 | `SPRING_DATASOURCE_USERNAME` | Usuario BD | `postgres` |
-| `SPRING_DATASOURCE_PASSWORD` | Contrasena BD | — |
-| `JWT_SECRET` | Clave para firmar tokens (min. 256 bits) | — |
+| `SPRING_DATASOURCE_PASSWORD` | Contrasena BD | — **(obligatoria)** |
+| `JWT_SECRET` | Clave para firmar tokens (min. 256 bits = 32+ caracteres) | — **(obligatoria)** |
 | `JWT_EXPIRATION_MS` | Expiracion del token en ms | `3600000` (1 hora) |
 | `CORS_ALLOWED_ORIGINS` | Origenes permitidos (separados por coma) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` |
 
-### Ejecucion local
+Hay una plantilla en [`.env.example`](.env.example).
+
+> **Importante:** Spring Boot **no lee el archivo `.env` por si solo**. Las variables deben estar definidas en el entorno del proceso (terminal, IDE, Docker `-e`, servidor). El `.env` esta en `.gitignore` a proposito: los secretos nunca se suben al repositorio, por eso **cada persona y cada entorno debe crear los suyos**.
+
+### De donde sale `JWT_SECRET`
+
+No viene de ningun servicio: **lo inventa quien despliega, una sola vez**. Es la clave con la que el backend firma los tokens de login.
+
+- Debe ser aleatoria y de 32 caracteres o mas.
+- Si cambia, todos los tokens emitidos dejan de ser validos (los usuarios deben volver a iniciar sesion).
+- **Debe ser la misma** en este backend y en el Motor de Scoring si este valida tokens de forma autonoma.
+- Cada entorno (local, pruebas, produccion) usa una distinta. Nunca se escribe en el codigo ni se sube a git.
+
+Generar una:
 
 ```bash
-# Clonar
-git clone https://github.com/Ulisesorozcovi/crediticio.auth.git
-cd crediticio.auth
-
-# Configurar variables (ejemplo)
-export SPRING_DATASOURCE_PASSWORD=tu_password
-export JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres-para-256-bits
-
-# Ejecutar
-./mvnw spring-boot:run        # Linux/Mac
-.\mvnw.cmd spring-boot:run    # Windows
+openssl rand -base64 48                # Linux/Mac/Git Bash
 ```
 
-La aplicacion arranca en `http://localhost:8081`. Flyway ejecuta las migraciones automaticamente al iniciar.
+```powershell
+[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))   # Windows PowerShell
+```
+
+### Primer arranque (paso a paso)
+
+1. Tener JDK 21 y PostgreSQL con la base `db_scoring` creada.
+2. Clonar el repo:
+   ```bash
+   git clone https://github.com/Ulisesorozcovi/auth.git
+   cd auth
+   ```
+3. Definir las variables de entorno en la misma terminal donde se va a ejecutar:
+
+   Windows (PowerShell):
+   ```powershell
+   $env:SPRING_DATASOURCE_USERNAME = "tu_usuario_bd"
+   $env:SPRING_DATASOURCE_PASSWORD = "tu_password_bd"
+   $env:JWT_SECRET = "<valor generado arriba>"
+   ```
+
+   Linux/Mac/Git Bash:
+   ```bash
+   export SPRING_DATASOURCE_USERNAME=tu_usuario_bd
+   export SPRING_DATASOURCE_PASSWORD=tu_password_bd
+   export JWT_SECRET="<valor generado arriba>"
+   ```
+4. Ejecutar:
+   ```bash
+   ./mvnw spring-boot:run        # Linux/Mac/Git Bash
+   .\mvnw.cmd spring-boot:run    # Windows
+   ```
+5. Verificar: `http://localhost:8081/actuator/health` debe responder `UP` y `http://localhost:8081/swagger-ui.html` muestra la API.
+
+La aplicacion arranca en `http://localhost:8081`. Flyway ejecuta las migraciones `V100+` automaticamente al iniciar; en una base compartida con el Motor de Scoring conviven con sus migraciones `V1-V99`.
+
+### Despliegue
+
+El repositorio **no contiene** ningun secreto ni la base de datos: al desplegar en cualquier servidor, contenedor o plataforma hay que **configurar ahi mismo** las variables de la tabla anterior (`SPRING_DATASOURCE_*`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`). El pipeline de CI (`.github/workflows/ci.yml`) solo compila y prueba contra H2, por eso no necesita secretos; **no despliega**.
+
+Lista de verificacion antes de desplegar:
+
+- [ ] Base `db_scoring` accesible desde el servidor y usuario con permisos de creacion de tablas
+- [ ] `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` definidas
+- [ ] `JWT_SECRET` propio del entorno (misma que el Motor de Scoring)
+- [ ] `CORS_ALLOWED_ORIGINS` con la URL real del frontend
+- [ ] Cambiar la contrasena del admin semilla (ver mas abajo)
+
+### Problemas comunes al arrancar
+
+| Sintoma | Causa | Solucion |
+|---|---|---|
+| Error de clave JWT / `WeakKeyException` / "key byte array is X bits" | `JWT_SECRET` vacia o menor a 32 caracteres | Definirla con 32+ caracteres |
+| `password authentication failed for user ...` | Usuario o contrasena de BD incorrectos, o variable sin definir | Revisar `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` |
+| `database "db_scoring" does not exist` | La base no esta creada | Crearla en PostgreSQL |
+| `Connection refused` a `localhost:5432` | PostgreSQL apagado o en otro host/puerto | Iniciar el servicio o ajustar `SPRING_DATASOURCE_URL` |
+| Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
+| Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
+| Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
 
 ### Ejecucion con Docker
 
