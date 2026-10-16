@@ -154,7 +154,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Nuevo\",\"email\":\"nuevo@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + analistaRol.getId() + "}"))
+                            .content("{\"nombre\":\"Nuevo\",\"email\":\"nuevo@test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":" + analistaRol.getId() + "}"))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.nombre").value("Nuevo"))
                     .andExpect(jsonPath("$.email").value("nuevo@test.com"))
@@ -170,7 +170,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"passwordSegura123\",\"idRol\":1}"))
+                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":1}"))
                     .andExpect(status().isForbidden());
         }
 
@@ -178,7 +178,7 @@ class AuthFlowIntegrationTest {
         void createUser_unauthenticated_returns401() throws Exception {
             mockMvc.perform(post("/api/v1/usuarios")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"passwordSegura123\",\"idRol\":1}"))
+                            .content("{\"nombre\":\"X\",\"email\":\"x@test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":1}"))
                     .andExpect(status().isUnauthorized());
         }
 
@@ -189,7 +189,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Dup\",\"email\":\"admin@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + adminRol.getId() + "}"))
+                            .content("{\"nombre\":\"Dup\",\"email\":\"admin@test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":" + adminRol.getId() + "}"))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.errorCode").value("DUPLICATE_EMAIL"));
         }
@@ -201,7 +201,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Dup\",\"email\":\"ADMIN@Test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + adminRol.getId() + "}"))
+                            .content("{\"nombre\":\"Dup\",\"email\":\"ADMIN@Test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":" + adminRol.getId() + "}"))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.errorCode").value("DUPLICATE_EMAIL"));
         }
@@ -213,13 +213,13 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Mixto\",\"email\":\"Mixto@Test.COM\",\"password\":\"passwordSegura123\",\"idRol\":" + analistaRol.getId() + "}"))
+                            .content("{\"nombre\":\"Mixto\",\"email\":\"Mixto@Test.COM\",\"password\":\"Segura2026!xyz\",\"idRol\":" + analistaRol.getId() + "}"))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.email").value("mixto@test.com"));
 
             mockMvc.perform(post("/api/v1/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"email\":\"MIXTO@test.com\",\"password\":\"passwordSegura123\"}"))
+                            .content("{\"email\":\"MIXTO@test.com\",\"password\":\"Segura2026!xyz\"}"))
                     .andExpect(status().isOk());
 
             org.junit.jupiter.api.Assertions.assertEquals("admin@test.com",
@@ -247,7 +247,7 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(post("/api/v1/usuarios")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"nombre\":\"Otro\",\"email\":\"otro@test.com\",\"password\":\"passwordSegura123\",\"idRol\":" + otro.getId() + "}"))
+                            .content("{\"nombre\":\"Otro\",\"email\":\"otro@test.com\",\"password\":\"Segura2026!xyz\",\"idRol\":" + otro.getId() + "}"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.errorCode").value("ROL_NOT_ALLOWED"));
         }
@@ -340,13 +340,13 @@ class AuthFlowIntegrationTest {
             mockMvc.perform(patch("/api/v1/usuarios/" + analistaId + "/password")
                             .header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"newPassword\":\"NuevaClave123\"}"))
+                            .content("{\"newPassword\":\"NuevaClave123!\"}"))
                     .andExpect(status().isNoContent());
 
             // Verificar que la nueva contrasena funciona
             mockMvc.perform(post("/api/v1/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"email\":\"analista@test.com\",\"password\":\"NuevaClave123\"}"))
+                            .content("{\"email\":\"analista@test.com\",\"password\":\"NuevaClave123!\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.token").isNotEmpty());
         }
