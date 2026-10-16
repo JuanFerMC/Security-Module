@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Slf4j
@@ -48,7 +49,7 @@ public class PasswordResetService implements PasswordResetInputPort {
             PasswordResetToken resetToken = PasswordResetToken.builder()
                     .token(rawToken)
                     .email(email)
-                    .expiresAt(LocalDateTime.now().plusMinutes(TOKEN_EXPIRATION_MINUTES))
+                    .expiresAt(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(TOKEN_EXPIRATION_MINUTES))
                     .used(false)
                     .build();
 
@@ -81,7 +82,7 @@ public class PasswordResetService implements PasswordResetInputPort {
                 .rol(usuario.getRol())
                 .activo(usuario.isActivo())
                 .fechaCreacion(usuario.getFechaCreacion())
-                .fechaModificacion(LocalDateTime.now())
+                .fechaModificacion(LocalDateTime.now(ZoneOffset.UTC))
                 .build();
 
         userRepository.save(updated);

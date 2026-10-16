@@ -21,6 +21,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String ROL_ADMIN = "ADMINISTRADOR_RIESGO";
+    private static final String ROL_ANALISTA = "ANALISTA_CREDITO";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitingFilter rateLimitingFilter;
     private final ObjectMapper objectMapper;
@@ -49,16 +52,16 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // Actuator completo solo ADMINISTRADOR_RIESGO
-                        .requestMatchers("/actuator/**").hasRole("ADMINISTRADOR_RIESGO")
+                        .requestMatchers("/actuator/**").hasRole(ROL_ADMIN)
                         // Solo ADMINISTRADOR_RIESGO
-                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios").hasRole("ADMINISTRADOR_RIESGO")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios").hasRole("ADMINISTRADOR_RIESGO")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole("ADMINISTRADOR_RIESGO")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios").hasRole(ROL_ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios").hasRole(ROL_ADMIN)
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/estado").hasRole(ROL_ADMIN)
                         // ADMINISTRADOR_RIESGO o ANALISTA_CREDITO
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole("ADMINISTRADOR_RIESGO", "ANALISTA_CREDITO")
-                        // Todo lo demás requiere autenticación
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/usuarios/*/password").hasAnyRole(ROL_ADMIN, ROL_ANALISTA)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/validate").hasAnyRole(ROL_ADMIN, ROL_ANALISTA)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/*").hasAnyRole(ROL_ADMIN, ROL_ANALISTA)
+                        // Cualquier otra ruta requiere autenticacion
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
