@@ -1,10 +1,13 @@
 package com.crediticio.auth.authentication.infrastructure.input;
 
+import com.crediticio.auth.authentication.application.dto.ForgotPasswordRequest;
 import com.crediticio.auth.authentication.application.dto.LoginRequest;
 import com.crediticio.auth.authentication.application.dto.LoginResponse;
 import com.crediticio.auth.authentication.application.dto.RefreshTokenRequest;
+import com.crediticio.auth.authentication.application.dto.ResetPasswordRequest;
 import com.crediticio.auth.authentication.application.dto.TokenValidationResponse;
 import com.crediticio.auth.authentication.ports.input.AuthInputPort;
+import com.crediticio.auth.authentication.ports.input.PasswordResetInputPort;
 import com.crediticio.auth.shared.response.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -30,6 +33,7 @@ public class AuthController {
     private static final String BEARER = "Bearer ";
 
     private final AuthInputPort authInputPort;
+    private final PasswordResetInputPort passwordResetInputPort;
 
     @PostMapping("/login")
     @Operation(
@@ -69,6 +73,34 @@ public class AuthController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
         authInputPort.logout(request.getRefreshToken());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(
+            summary = "Solicitar recuperacion de contrasena",
+            description = "Envia un token de recuperacion al email proporcionado. Siempre retorna 200 para no revelar si el email existe."
+    )
+    @ApiResponse(responseCode = "200", description = "Si el email existe, se envio el token de recuperacion")
+    @ApiResponse(responseCode = "400", description = "Email vacio o formato invalido",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetInputPort.forgotPassword(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(
+            summary = "Restablecer contrasena con token",
+            description = "Cambia la contrasena usando el token de recuperacion recibido por email. El token es de un solo uso y expira en 30 minutos."
+    )
+    @ApiResponse(responseCode = "204", description = "Contrasena restablecida exitosamente")
+    @ApiResponse(responseCode = "400", description = "Token vacio o contrasena no cumple complejidad",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "401", description = "Token invalido, expirado o ya utilizado",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetInputPort.resetPassword(request);
         return ResponseEntity.noContent().build();
     }
 

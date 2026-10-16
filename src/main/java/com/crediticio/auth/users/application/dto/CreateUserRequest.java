@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -30,7 +31,9 @@ public class CreateUserRequest {
 
     @NotBlank
     @Size(min = 12, max = 72)
-    @Schema(description = "Contrasena (12 a 72 caracteres)", example = "SeguraClave2026!")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,}$",
+            message = "Debe contener al menos una mayuscula, una minuscula, un digito y un caracter especial (@$!%*?&)")
+    @Schema(description = "Contrasena (12-72 caracteres, debe incluir mayuscula, minuscula, digito y caracter especial)", example = "SeguraClave2026!")
     private String password;
 
     @NotNull

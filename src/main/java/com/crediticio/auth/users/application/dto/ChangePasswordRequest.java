@@ -2,6 +2,7 @@ package com.crediticio.auth.users.application.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,6 +21,8 @@ public class ChangePasswordRequest {
 
     @NotBlank
     @Size(min = 12, max = 72)
-    @Schema(description = "Nueva contrasena (12 a 72 caracteres)", example = "NuevaClave2026!")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,}$",
+            message = "Debe contener al menos una mayuscula, una minuscula, un digito y un caracter especial (@$!%*?&)")
+    @Schema(description = "Nueva contrasena (12-72 caracteres, debe incluir mayuscula, minuscula, digito y caracter especial)", example = "NuevaClave2026!")
     private String newPassword;
 }
