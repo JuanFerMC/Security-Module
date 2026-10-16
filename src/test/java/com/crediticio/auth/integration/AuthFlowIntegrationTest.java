@@ -6,7 +6,6 @@ import com.crediticio.auth.roles.infrastructure.output.RolJpaRepository;
 import com.crediticio.auth.users.infrastructure.output.UsuarioJpaEntity;
 import com.crediticio.auth.users.infrastructure.output.UsuarioJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;

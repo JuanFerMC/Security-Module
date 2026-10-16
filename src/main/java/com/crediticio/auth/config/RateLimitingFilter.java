@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimitingFilter extends OncePerRequestFilter {
 
     private static final int MAX_ATTEMPTS = 5;
-    private static final long WINDOW_MS = 15 * 60 * 1000;
+    private static final long WINDOW_MS = 15L * 60 * 1000;
 
     private final ConcurrentHashMap<String, LoginAttempt> attempts = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();

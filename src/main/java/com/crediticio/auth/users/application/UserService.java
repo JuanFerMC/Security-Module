@@ -35,6 +35,8 @@ import java.util.List;
 @Transactional
 public class UserService implements CreateUserInputPort, GetUserInputPort, ToggleUserStatusInputPort, ChangePasswordInputPort {
 
+    private static final String USUARIO_NO_ENCONTRADO = "Usuario no encontrado con id: ";
+
     private final UserRepositoryPort userRepository;
     private final RolRepositoryPort rolRepository;
     private final PasswordEncoderPort passwordEncoder;
@@ -88,13 +90,13 @@ public class UserService implements CreateUserInputPort, GetUserInputPort, Toggl
     public UserResponse getUserById(Long id) {
         return userRepository.findById(id)
                 .map(this::toResponse)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(USUARIO_NO_ENCONTRADO + id));
     }
 
     @Override
     public UserResponse toggleStatus(Long id, ToggleStatusRequest request) {
         Usuario usuario = userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(USUARIO_NO_ENCONTRADO + id));
 
         Usuario updated = Usuario.builder()
                 .id(usuario.getId())
@@ -114,7 +116,7 @@ public class UserService implements CreateUserInputPort, GetUserInputPort, Toggl
     @Override
     public void changePassword(Long userId, ChangePasswordRequest request, String authenticatedEmail, boolean isAdmin) {
         Usuario usuario = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado con id: " + userId));
+                .orElseThrow(() -> new UserNotFoundException(USUARIO_NO_ENCONTRADO + userId));
 
         if (!isAdmin && !usuario.getEmail().equals(authenticatedEmail)) {
             throw new AccessDeniedException("Solo puede cambiar su propia contrasena");

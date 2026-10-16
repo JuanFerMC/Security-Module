@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,7 +30,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AuthService implements AuthInputPort {
 
-    /** Mensaje unico para todo fallo de login: no revela cual credencial fallo (RF02). */
+    /** Mensaje unico para cualquier fallo de login: no revela cual credencial fallo (RF02). */
     private static final String CREDENCIALES_INVALIDAS = "Credenciales inválidas";
     private static final String REFRESH_INVALIDO = "Refresh token inválido";
     private static final String TOKEN_INVALIDO = "Token inválido";
@@ -60,9 +61,15 @@ public class AuthService implements AuthInputPort {
         boolean passwordOk = passwordEncoder.matches(request.getPassword(), hash);
 
         if (encontrado.isEmpty() || !passwordOk || !encontrado.get().isActivo()) {
-            log.warn("Autenticacion fallida: email={}, motivo={}", email,
-                    encontrado.isEmpty() ? "usuario_inexistente"
-                            : !passwordOk ? "contrasena_incorrecta" : "usuario_inactivo");
+            String motivo;
+            if (encontrado.isEmpty()) {
+                motivo = "usuario_inexistente";
+            } else if (!passwordOk) {
+                motivo = "contrasena_incorrecta";
+            } else {
+                motivo = "usuario_inactivo";
+            }
+            log.warn("Autenticacion fallida: email={}, motivo={}", email, motivo);
             throw new InvalidCredentialsException(CREDENCIALES_INVALIDAS);
         }
 
@@ -82,7 +89,7 @@ public class AuthService implements AuthInputPort {
                     return new InvalidCredentialsException(REFRESH_INVALIDO);
                 });
 
-        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime ahora = LocalDateTime.now(ZoneOffset.UTC);
 
 
         if (actual.getUsadoEn() != null || actual.getRevocadoEn() != null) {
@@ -123,7 +130,7 @@ public class AuthService implements AuthInputPort {
     public void logout(String refreshToken) {
 
         buscarRefresh(refreshToken).ifPresent(token -> {
-            refreshTokenRepository.revocarFamilia(token.getFamiliaId(), LocalDateTime.now());
+            refreshTokenRepository.revocarFamilia(token.getFamiliaId(), LocalDateTime.now(ZoneOffset.UTC));
             log.info("Sesion cerrada: userId={}, familia={}", token.getUsuarioId(), token.getFamiliaId());
         });
     }
@@ -159,7 +166,7 @@ public class AuthService implements AuthInputPort {
                 usuario.getId(), usuario.getEmail(), usuario.getRol().getNombre());
 
         String refreshPlano = tokenProvider.generateRefreshToken();
-        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime ahora = LocalDateTime.now(ZoneOffset.UTC);
         refreshTokenRepository.save(RefreshToken.builder()
                 .usuarioId(usuario.getId())
                 .familiaId(familiaId)
