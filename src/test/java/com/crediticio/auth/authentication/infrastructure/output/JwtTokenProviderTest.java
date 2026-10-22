@@ -2,13 +2,19 @@ package com.crediticio.auth.authentication.infrastructure.output;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,57 +22,73 @@ class JwtTokenProviderTest {
 
     private JwtTokenProvider tokenProvider;
 
-    private static final String SECRET = "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!";
     private static final String ISSUER = "crediticio-auth";
-    private static final String AUDIENCE = "crediticio-scoring";
+    private static final List<String> AUDIENCES = List.of("scoring-api", "evaluation-query-api");
+    private static RSAPrivateKey testPrivateKey;
+    private static RSAPublicKey testPublicKey;
+
+    @BeforeAll
+    static void loadKeys() throws Exception {
+        try (InputStream in = new ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+            testPrivateKey = RsaKeyConverters.pkcs8().convert(in);
+        }
+        try (InputStream in = new ClassPathResource("keys/jwt-publica-test.pem").getInputStream()) {
+            testPublicKey = RsaKeyConverters.x509().convert(in);
+        }
+    }
 
     @BeforeEach
     void setUp() {
-        tokenProvider = provider(SECRET, 900000L, 7L);
+        tokenProvider = provider(900000L, 7L);
     }
 
-    private JwtTokenProvider provider(String secret, long accessMs, long refreshDays) {
+    private JwtTokenProvider provider(long accessMs, long refreshDays) {
         JwtTokenProvider p = new JwtTokenProvider();
-        ReflectionTestUtils.setField(p, "jwtSecret", secret);
+        ReflectionTestUtils.setField(p, "privateKeyResource", new ClassPathResource("keys/jwt-privada-test.pem"));
+        ReflectionTestUtils.setField(p, "publicKeyResource", new ClassPathResource("keys/jwt-publica-test.pem"));
         ReflectionTestUtils.setField(p, "accessExpirationMs", accessMs);
         ReflectionTestUtils.setField(p, "refreshExpirationDays", refreshDays);
         ReflectionTestUtils.setField(p, "issuer", ISSUER);
-        ReflectionTestUtils.setField(p, "audience", AUDIENCE);
+        ReflectionTestUtils.setField(p, "audiences", AUDIENCES);
+        p.validateConfiguration();
         return p;
     }
 
-    private String tokenWith(String issuer, String audience, long expiresInMs, String secret) {
+    private String forgedToken(String issuer, long expiresInMs) {
         return Jwts.builder()
-                .subject("7")
+                .subject(UUID.randomUUID().toString())
                 .issuer(issuer)
-                .audience().add(audience).and()
-                .claim("rol", "ADMINISTRADOR_RIESGO")
+                .audience().add("scoring-api").and()
+                .claim("role", "ADMINISTRADOR_RIESGO")
                 .issuedAt(new Date(System.currentTimeMillis() - 10000))
                 .expiration(new Date(System.currentTimeMillis() + expiresInMs))
-                .signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
+                .signWith(testPrivateKey, Jwts.SIG.RS256)
                 .compact();
     }
 
     @Test
     void generateToken_createsValidToken() {
-        String token = tokenProvider.generateToken(7L, "juan@test.com", "ADMINISTRADOR_RIESGO");
+        UUID uuid = UUID.randomUUID();
+        String token = tokenProvider.generateToken(uuid, "juan@test.com", "ADMINISTRADOR_RIESGO");
 
         assertNotNull(token);
         assertTrue(tokenProvider.isTokenValid(token));
     }
 
     @Test
-    void generateToken_includesIdentityIssuerAudienceAndFifteenMinutes() {
-        String token = tokenProvider.generateToken(7L, "juan@test.com", "ANALISTA_CREDITO");
+    void generateToken_includesCorrectClaims() {
+        UUID uuid = UUID.randomUUID();
+        String token = tokenProvider.generateToken(uuid, "juan@test.com", "ANALISTA_CREDITO");
 
         Claims claims = Jwts.parser()
-                .verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+                .verifyWith(testPublicKey)
                 .build().parseSignedClaims(token).getPayload();
 
-        assertEquals("7", claims.getSubject());
+        assertEquals(uuid.toString(), claims.getSubject());
         assertEquals(ISSUER, claims.getIssuer());
-        assertTrue(claims.getAudience().contains(AUDIENCE));
-        assertEquals("ANALISTA_CREDITO", claims.get("rol", String.class));
+        assertTrue(claims.getAudience().contains("scoring-api"));
+        assertTrue(claims.getAudience().contains("evaluation-query-api"));
+        assertEquals("ANALISTA_CREDITO", claims.get("role", String.class));
         assertNotNull(claims.getIssuedAt());
         assertNotNull(claims.getId());
         assertEquals(15 * 60 * 1000L, claims.getExpiration().getTime() - claims.getIssuedAt().getTime());
@@ -75,31 +97,28 @@ class JwtTokenProviderTest {
 
     @Test
     void getters_returnCorrectClaims() {
-        String token = tokenProvider.generateToken(7L, "juan@test.com", "ANALISTA_CREDITO");
+        UUID uuid = UUID.randomUUID();
+        String token = tokenProvider.generateToken(uuid, "juan@test.com", "ANALISTA_CREDITO");
 
-        assertEquals(7L, tokenProvider.getUserIdFromToken(token));
+        assertEquals(uuid, tokenProvider.getUuidFromToken(token));
         assertEquals("juan@test.com", tokenProvider.getEmailFromToken(token));
         assertEquals("ANALISTA_CREDITO", tokenProvider.getRolFromToken(token));
     }
 
     @Test
     void isTokenValid_expiredToken_returnsFalse() {
-        assertFalse(tokenProvider.isTokenValid(tokenWith(ISSUER, AUDIENCE, -5000, SECRET)));
+        assertFalse(tokenProvider.isTokenValid(forgedToken(ISSUER, -5000)));
     }
 
     @Test
     void isTokenValid_wrongIssuer_returnsFalse() {
-        assertFalse(tokenProvider.isTokenValid(tokenWith("otro-emisor", AUDIENCE, 60000, SECRET)));
-    }
-
-    @Test
-    void isTokenValid_wrongAudience_returnsFalse() {
-        assertFalse(tokenProvider.isTokenValid(tokenWith(ISSUER, "otra-audiencia", 60000, SECRET)));
+        assertFalse(tokenProvider.isTokenValid(forgedToken("otro-emisor", 60000)));
     }
 
     @Test
     void isTokenValid_tamperedToken_returnsFalse() {
-        String token = tokenProvider.generateToken(7L, "juan@test.com", "ANALISTA_CREDITO");
+        UUID uuid = UUID.randomUUID();
+        String token = tokenProvider.generateToken(uuid, "juan@test.com", "ANALISTA_CREDITO");
         String[] parts = token.split("\\.");
         String tampered = parts[0] + "." + parts[1] + "A." + parts[2];
 
@@ -117,10 +136,20 @@ class JwtTokenProviderTest {
     }
 
     @Test
-    void isTokenValid_wrongSecret_returnsFalse() {
-        String other = tokenWith(ISSUER, AUDIENCE, 60000, "another-secret-key-that-is-at-least-256-bits-long-for-hmac!!");
+    void isTokenValid_hmacToken_isRejected() {
+        String hmacToken = Jwts.builder()
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .audience().add("scoring-api").and()
+                .claim("role", "ADMINISTRADOR_RIESGO")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                        "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!"
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .compact();
 
-        assertFalse(tokenProvider.isTokenValid(other));
+        assertFalse(tokenProvider.isTokenValid(hmacToken));
     }
 
     @Test
@@ -138,18 +167,12 @@ class JwtTokenProviderTest {
 
     @Test
     void validateConfiguration_acceptsLimits() {
-        assertDoesNotThrow(() -> provider(SECRET, 900000L, 7L).validateConfiguration());
-    }
-
-    @Test
-    void validateConfiguration_rejectsShortSecret() {
-        assertThrows(IllegalStateException.class, () -> provider("corta", 900000L, 7L).validateConfiguration());
-        assertThrows(IllegalStateException.class, () -> provider("", 900000L, 7L).validateConfiguration());
+        assertDoesNotThrow(() -> provider(900000L, 7L));
     }
 
     @Test
     void validateConfiguration_rejectsLifetimesAboveLimits() {
-        assertThrows(IllegalStateException.class, () -> provider(SECRET, 900001L, 7L).validateConfiguration());
-        assertThrows(IllegalStateException.class, () -> provider(SECRET, 900000L, 8L).validateConfiguration());
+        assertThrows(IllegalStateException.class, () -> provider(900001L, 7L));
+        assertThrows(IllegalStateException.class, () -> provider(900000L, 8L));
     }
 }

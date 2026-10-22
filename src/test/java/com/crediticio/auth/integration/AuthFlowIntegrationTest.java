@@ -634,15 +634,18 @@ class AuthFlowIntegrationTest {
 
         @Test
         void accessToken_withWrongIssuer_isRejected() throws Exception {
+            java.util.UUID adminUuid = usuarioRepository.findByEmail("admin@test.com").get().getUuidPublico();
+            java.security.interfaces.RSAPrivateKey pk;
+            try (java.io.InputStream in = new org.springframework.core.io.ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+                pk = org.springframework.security.converter.RsaKeyConverters.pkcs8().convert(in);
+            }
             String forged = io.jsonwebtoken.Jwts.builder()
-                    .subject("1").issuer("otro-emisor")
-                    .audience().add("crediticio-scoring").and()
-                    .claim("rol", "ADMINISTRADOR_RIESGO")
+                    .subject(adminUuid.toString()).issuer("otro-emisor")
+                    .audience().add("scoring-api").and()
+                    .claim("role", "ADMINISTRADOR_RIESGO")
                     .issuedAt(new java.util.Date())
                     .expiration(new java.util.Date(System.currentTimeMillis() + 60000))
-                    .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                            "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!"
-                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                    .signWith(pk, io.jsonwebtoken.Jwts.SIG.RS256)
                     .compact();
 
             mockMvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + forged))
@@ -651,18 +654,18 @@ class AuthFlowIntegrationTest {
 
         @Test
         void accessToken_roleClaimIsNotTrusted() throws Exception {
-            // Token valido de un analista pero con el claim rol adulterado a administrador:
-            // el rol efectivo sale de la BD, asi que no puede listar usuarios.
-            Long analistaId = usuarioRepository.findByEmail("analista@test.com").get().getId();
+            java.util.UUID analistaUuid = usuarioRepository.findByEmail("analista@test.com").get().getUuidPublico();
+            java.security.interfaces.RSAPrivateKey pk;
+            try (java.io.InputStream in = new org.springframework.core.io.ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+                pk = org.springframework.security.converter.RsaKeyConverters.pkcs8().convert(in);
+            }
             String forged = io.jsonwebtoken.Jwts.builder()
-                    .subject(String.valueOf(analistaId)).issuer("crediticio-auth")
-                    .audience().add("crediticio-scoring").and()
-                    .claim("rol", "ADMINISTRADOR_RIESGO")
+                    .subject(analistaUuid.toString()).issuer("crediticio-auth")
+                    .audience().add("scoring-api").and()
+                    .claim("role", "ADMINISTRADOR_RIESGO")
                     .issuedAt(new java.util.Date())
                     .expiration(new java.util.Date(System.currentTimeMillis() + 60000))
-                    .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                            "test-secret-key-for-testing-purposes-only-minimum-256-bits-long!!"
-                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                    .signWith(pk, io.jsonwebtoken.Jwts.SIG.RS256)
                     .compact();
 
             mockMvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + forged))

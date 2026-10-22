@@ -49,6 +49,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     private final UUID familia = UUID.randomUUID();
+    private final UUID uuidUsuario = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @BeforeEach
     void setUp() {
@@ -59,7 +60,7 @@ class AuthServiceTest {
 
     private Usuario user(boolean activo) {
         return Usuario.builder()
-                .id(1L).nombre("Juan").email("juan@test.com")
+                .id(1L).uuidPublico(uuidUsuario).nombre("Juan").email("juan@test.com")
                 .passwordHash("hashed").activo(activo)
                 .rol(Rol.builder().id(1L).nombre("ADMINISTRADOR_RIESGO").build())
                 .fechaCreacion(LocalDateTime.now())
@@ -79,7 +80,7 @@ class AuthServiceTest {
     void login_success_issuesAccessAndRefresh() {
         when(userRepository.findByEmail("juan@test.com")).thenReturn(Optional.of(user(true)));
         when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
-        when(tokenProvider.generateToken(1L, "juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("jwt");
+        when(tokenProvider.generateToken(uuidUsuario, "juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("jwt");
         when(tokenProvider.generateRefreshToken()).thenReturn("refresh-plano");
 
         LoginResponse response = authService.login(new LoginRequest("Juan@Test.com", "password123"));
@@ -141,7 +142,7 @@ class AuthServiceTest {
         when(refreshTokenRepository.findByTokenHash("h:viejo")).thenReturn(Optional.of(actual));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user(true)));
         when(refreshTokenRepository.marcarUsado(eq(10L), any())).thenReturn(true);
-        when(tokenProvider.generateToken(1L, "juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("nuevo-jwt");
+        when(tokenProvider.generateToken(uuidUsuario, "juan@test.com", "ADMINISTRADOR_RIESGO")).thenReturn("nuevo-jwt");
         when(tokenProvider.generateRefreshToken()).thenReturn("nuevo-refresh");
 
         LoginResponse response = authService.refresh("viejo");
@@ -264,8 +265,8 @@ class AuthServiceTest {
     @Test
     void validate_validToken_returnsUserInfoFromDatabase() {
         when(tokenProvider.isTokenValid("valid-token")).thenReturn(true);
-        when(tokenProvider.getUserIdFromToken("valid-token")).thenReturn(1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user(true)));
+        when(tokenProvider.getUuidFromToken("valid-token")).thenReturn(uuidUsuario);
+        when(userRepository.findByUuidPublico(uuidUsuario)).thenReturn(Optional.of(user(true)));
 
         TokenValidationResponse response = authService.validate("valid-token");
 
@@ -284,8 +285,8 @@ class AuthServiceTest {
     @Test
     void validate_inactiveUser_throws() {
         when(tokenProvider.isTokenValid("t")).thenReturn(true);
-        when(tokenProvider.getUserIdFromToken("t")).thenReturn(1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user(false)));
+        when(tokenProvider.getUuidFromToken("t")).thenReturn(uuidUsuario);
+        when(userRepository.findByUuidPublico(uuidUsuario)).thenReturn(Optional.of(user(false)));
 
         assertThrows(InvalidCredentialsException.class, () -> authService.validate("t"));
     }

@@ -29,14 +29,17 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:}
+    # RS256: par de claves RSA en archivos PEM externos (nunca se versionan). La clave publica se entrega
+    # a scoring-api y evaluation-query-api para validacion local.
+    private-key: ${JWT_PRIVATE_KEY_LOCATION:file:./keys/jwt-privada.pem}
+    public-key: ${JWT_PUBLIC_KEY_LOCATION:file:./keys/jwt-publica.pem}
     # HU09 RNF02: access token de 15 minutos como maximo (900000 ms); refresh de 7 dias como maximo.
-    # La aplicacion no arranca si se superan estos limites.
     access-expiration-ms: ${JWT_EXPIRATION_MS:900000}
     refresh-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:7}
-    # Identificadores de emisor y audiencia (HU09 RF04/RF05). El Motor de Scoring debe validar los mismos.
+    # Emisor (HU09 RF04/RF05). scoring-api y evaluation-query-api validan el mismo valor.
     issuer: ${JWT_ISSUER:crediticio-auth}
-    audience: ${JWT_AUDIENCE:crediticio-scoring}
+    # Audiencias: cada API que valide estos tokens debe estar listada.
+    audiences: ${JWT_AUDIENCES:scoring-api,evaluation-query-api}
   bootstrap:
     # Inicializacion del primer administrador (HU08 RF09/RF10). Solo actua si no existe ningun
     # ADMINISTRADOR_RIESGO. Nunca se versionan valores reales.

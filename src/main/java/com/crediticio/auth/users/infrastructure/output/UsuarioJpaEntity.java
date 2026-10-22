@@ -20,6 +20,7 @@ import org.hibernate.envers.Audited;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "usuarios")
@@ -36,6 +37,9 @@ public class UsuarioJpaEntity {
     // La columna es SERIAL (INTEGER) en BD (V101); Long en Java. Sin esto Hibernate espera BIGINT y falla la validacion.
     @JdbcTypeCode(SqlTypes.INTEGER)
     private Long id;
+
+    @Column(name = "uuid_publico", nullable = false, unique = true, updatable = false)
+    private UUID uuidPublico;
 
     @Column(name = "nombre", nullable = false, length = 150)
     private String nombre;
@@ -65,6 +69,9 @@ public class UsuarioJpaEntity {
     @PrePersist
     protected void onCreate() {
         this.fechaCreacion = LocalDateTime.now();
+        if (this.uuidPublico == null) {
+            this.uuidPublico = UUID.randomUUID();
+        }
     }
 
     @PreUpdate
