@@ -20,7 +20,7 @@ Al iniciar sesion (`POST /auth/login`) se reciben **dos tokens**: un *access tok
 ### Flujo recomendado en el frontend
 
 1. **Login:** `POST /auth/login` con email y contrasena → guardar `token` (access) y `refreshToken`. Preferir memoria para el access token; tratar el refresh token como un secreto.
-2. **Peticiones:** incluir `Authorization: Bearer <token>` en cada request a Auth y Motor de Scoring.
+2. **Peticiones:** incluir `Authorization: Bearer <token>` en cada request a Auth, Scoring API y Query API.
 3. **Renovar:** cuando el access token venza (401) o falten pocos segundos (`expiresIn`), llamar `POST /auth/refresh` con `{ "refreshToken": "<ultimo>" }` y **reemplazar ambos tokens**. El refresh token anterior deja de servir.
 4. **No reutilizar:** nunca reenviar un refresh token ya canjeado ni disparar dos renovaciones a la vez con el mismo: la segunda se interpreta como reutilizacion y **revoca la sesion**.
 5. **Logout:** `POST /auth/logout` con el refresh token y descartar ambos tokens.
@@ -54,7 +54,7 @@ Autentica un usuario con email y contrasena. Retorna un access token JWT (15 min
 
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refreshToken": "q3k2Vf0o1xk3wH...",
   "tokenType": "Bearer",
   "expiresIn": 900,
@@ -70,7 +70,7 @@ Autentica un usuario con email y contrasena. Retorna un access token JWT (15 min
 | `expiresIn` | number | Segundos de vigencia del access token (900) |
 | `rol` | string | `ADMINISTRADOR_RIESGO` o `ANALISTA_CREDITO` |
 
-Claims del access token: `sub` (id de usuario), `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`.
+Claims del access token: `sub` (UUID publico del usuario), `email`, `role`, `iss`, `aud` (lista: `scoring-api`, `evaluation-query-api`), `iat`, `exp`, `jti`. Firmado con RS256.
 
 **Errores:**
 
@@ -130,7 +130,7 @@ Invalida la sesion (todos los refresh tokens de esa sesion). Idempotente: un tok
 
 ### GET /auth/validate
 
-Valida un JWT y retorna la identidad del usuario consultando la BD. Consumido internamente por el Motor de Scoring para verificar peticiones.
+Valida un JWT y retorna la identidad del usuario consultando la BD. Consumido internamente por Scoring API o Query API para verificar peticiones cuando la validacion local no es suficiente.
 
 **Acceso:** ADMINISTRADOR_RIESGO, ANALISTA_CREDITO
 

@@ -22,8 +22,8 @@ Se evaluaron tres alternativas:
 
 Adoptamos **JWT stateless** con la librería `jjwt` (io.jsonwebtoken).
 
-- El token contiene: `sub` (email), `rol`, `iat`, `exp`.
-- La clave secreta (`JWT_SECRET`) se comparte entre Auth y Motor de Scoring vía variable de entorno.
+- El token contiene: `sub` (UUID publico), `email`, `role`, `iss`, `aud`, `iat`, `exp`, `jti`.
+- **Firma RS256** (criptografia asimetrica): auth-api firma con la clave privada RSA; Scoring API y Query API validan con la clave publica. Ningun secreto compartido entre servicios. *(Migrado desde HMAC/HS256 — ver commit de migracion RS256.)*
 - Expiración configurable (`JWT_EXPIRATION_MS`, default y máximo 15 minutos desde HU09; ver ADR-005).
 - El token viaja en el header `Authorization: Bearer <token>`.
 - La emisión y validación están aisladas detrás de `TokenProviderPort`, permitiendo cambiar la implementación sin afectar el dominio.
@@ -40,5 +40,5 @@ Adoptamos **JWT stateless** con la librería `jjwt` (io.jsonwebtoken).
 ### Negativas
 
 - Un token emitido no se puede revocar antes de su expiración (salvo implementar una blacklist, que reintroduce estado).
-- Si se compromete `JWT_SECRET`, todos los tokens son vulnerables hasta rotar la clave.
+- Si se compromete la clave privada RSA, todos los tokens son vulnerables hasta rotar el par de claves. Con RS256 la superficie de ataque es menor: solo auth-api posee la clave privada.
 - La información del token (email, rol) puede quedar desactualizada si el usuario cambia de rol o se desactiva antes de que el token expire. El endpoint `GET /auth/validate` mitiga esto consultando el estado actual del usuario.

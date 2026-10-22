@@ -15,7 +15,7 @@ Estado verificado contra la version `main` tras HU08, HU09 y la correccion de er
 | Origen permitido por CORS (por defecto) | `http://localhost:3000` (puerto del frontend) |
 | Formato | JSON, `Content-Type: application/json`, UTF-8 |
 
-Sugerencia de variable en el frontend: `VITE_AUTH_BASE_URL=http://localhost:8081`. Es **distinta** de `VITE_API_BASE_URL` (Motor de Scoring, `:8080`): hacen falta dos clientes HTTP, uno por backend.
+Sugerencia de variable en el frontend: `VITE_AUTH_BASE_URL=http://localhost:8081`. Es **distinta** de `VITE_API_BASE_URL` (Scoring API, `:8080`) y `VITE_QUERY_BASE_URL` (Query API, `:8082`): hacen falta clientes HTTP separados por backend.
 
 **CORS:** los origenes se configuran en el backend con `CORS_ALLOWED_ORIGINS` (lista separada por comas). Si el frontend corre en otra URL (por ejemplo `http://localhost:5173` o un dominio de pruebas), hay que agregarla alli. Se permiten todos los encabezados, incluido `Authorization`.
 
@@ -311,7 +311,7 @@ Segun el estado actual de `credit-compass` (login simulado en `src/api/auth.ts`)
 - [ ] Retirar o redirigir `/crear-cuenta`; crear el modulo de usuarios para `ADMINISTRADOR_RIESGO`.
 - [ ] Cambiar los nombres de rol a `ADMINISTRADOR_RIESGO` y `ANALISTA_CREDITO`.
 - [ ] Mapear los `errorCode` de la seccion 7 a mensajes de la UI.
-- [ ] Mantener `VITE_SCORING_SENDS_TOKEN=false` hasta que el Motor de Scoring permita el encabezado `Authorization` en su CORS.
+- [ ] Mantener `VITE_SCORING_SENDS_TOKEN=false` hasta que Scoring API permita el encabezado `Authorization` en su CORS.
 
 ---
 
