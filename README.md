@@ -8,11 +8,12 @@ Gestiona el ciclo de vida de usuarios (registro, consulta, activacion/desactivac
 
 | Componente | Repositorio | Puerto |
 |---|---|---|
-| Motor de Scoring | `motor-scoring-crediticio` | `8080` |
-| **API de Autenticacion** (este repo) | `crediticio.auth` | `8081` |
+| Scoring API | `scoring-api` | `8080` |
+| **API de Autenticacion** (este repo) | `auth` | `8081` |
+| Evaluation Query API | `evaluation-query-api` | `8082` |
 | Frontend | `credit-compass` | `3000` |
 
-Los tres comparten la misma base de datos PostgreSQL (`db_scoring`). Este backend administra las tablas `usuarios` y `roles`; el Motor de Scoring administra solicitantes, reglas y evaluaciones.
+Auth, Scoring y Query comparten la misma base de datos PostgreSQL (`db_scoring`). Este backend administra las tablas `usuarios`, `roles` y `refresh_tokens`; Scoring API administra solicitantes, reglas y evaluaciones; Query API consulta resultados.
 
 ## Tecnologias
 
@@ -71,7 +72,7 @@ com.crediticio.auth/
 - PostgreSQL con la base de datos `db_scoring` **ya creada** y un usuario con permiso para crear tablas (Flyway crea las tablas, no la base)
 - Docker (opcional, para ejecucion en contenedor)
 
-> **Si la aplicacion no arranca**, casi siempre es una de estas tres: falta `JWT_SECRET`, falta `SPRING_DATASOURCE_PASSWORD` o el usuario/base de datos no existen. Ver [Primer arranque](#primer-arranque-paso-a-paso) y [Problemas comunes](#problemas-comunes-al-arrancar).
+> **Si la aplicacion no arranca**, casi siempre es una de estas tres: faltan las claves RSA (`keys/jwt-privada.pem` y `jwt-publica.pem`), falta `SPRING_DATASOURCE_PASSWORD` o el usuario/base de datos no existen. Ver [Primer arranque](#primer-arranque-paso-a-paso) y [Problemas comunes](#problemas-comunes-al-arrancar).
 
 ## Configuracion
 
@@ -82,11 +83,12 @@ com.crediticio.auth/
 | `SPRING_DATASOURCE_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/db_scoring` |
 | `SPRING_DATASOURCE_USERNAME` | Usuario BD | `postgres` |
 | `SPRING_DATASOURCE_PASSWORD` | Contrasena BD | — **(obligatoria)** |
-| `JWT_SECRET` | Clave para firmar tokens (min. 256 bits = 32+ caracteres) | — **(obligatoria)** |
+| `JWT_PRIVATE_KEY_LOCATION` | Ruta al archivo PEM de la clave privada RSA (PKCS#8) | `file:./keys/jwt-privada.pem` |
+| `JWT_PUBLIC_KEY_LOCATION` | Ruta al archivo PEM de la clave publica RSA | `file:./keys/jwt-publica.pem` |
 | `JWT_EXPIRATION_MS` | Vigencia del access token en ms. **Maximo 900000 (15 min)**; la app no arranca si se supera | `900000` (15 min) |
 | `JWT_REFRESH_EXPIRATION_DAYS` | Vigencia del refresh token en dias. **Maximo 7**; la app no arranca si se supera | `7` |
-| `JWT_ISSUER` | Emisor (`iss`) de los tokens. El Motor de Scoring debe validar el mismo | `crediticio-auth` |
-| `JWT_AUDIENCE` | Audiencia (`aud`) de los tokens. El Motor de Scoring debe validar la misma | `crediticio-scoring` |
+| `JWT_ISSUER` | Emisor (`iss`) de los tokens. Scoring API y Query API deben validar el mismo | `crediticio-auth` |
+| `JWT_AUDIENCES` | Audiencias (`aud`) de los tokens, separadas por coma. Cada API que valide estos tokens debe estar listada | `scoring-api,evaluation-query-api` |
 | `CORS_ALLOWED_ORIGINS` | Origenes permitidos (separados por coma) | `http://localhost:3000` |
 | `SERVER_PORT` | Puerto del servidor | `8081` |
 | `INIT_ADMIN_EMAIL` | Correo del primer administrador (solo primer arranque) | — |
@@ -97,24 +99,23 @@ Hay una plantilla en [`.env.example`](.env.example).
 
 > **Importante:** Spring Boot **no lee el archivo `.env` por si solo**. Las variables deben estar definidas en el entorno del proceso (terminal, IDE, Docker `-e`, servidor). El `.env` esta en `.gitignore` a proposito: los secretos nunca se suben al repositorio, por eso **cada persona y cada entorno debe crear los suyos**.
 
-### De donde sale `JWT_SECRET`
+### Par de claves RSA (RS256)
 
-No viene de ningun servicio: **lo inventa quien despliega, una sola vez**. Es la clave con la que el backend firma los tokens de login.
+Los tokens se firman con **RS256** (criptografia asimetrica): la clave privada firma (solo este backend la tiene), la clave publica verifica (se distribuye a Scoring API y Query API).
 
-- Debe ser aleatoria y de 32 caracteres o mas.
-- Si cambia, todos los tokens emitidos dejan de ser validos (los usuarios deben volver a iniciar sesion).
-- **Debe ser la misma** en este backend y en el Motor de Scoring si este valida tokens de forma autonoma.
-- Cada entorno (local, pruebas, produccion) usa una distinta. Nunca se escribe en el codigo ni se sube a git.
+- Cada entorno (local, pruebas, produccion) tiene **su propio par**. Los archivos PEM nunca se suben al repositorio (estan en `.gitignore`).
+- Si se regenera el par, todos los tokens emitidos previamente dejan de ser validos.
+- La clave publica debe copiarse a `scoring-api` y `evaluation-query-api` para que validen tokens de forma autonoma.
 
-Generar una:
+Generar un par (formato PKCS#8, 2048 bits):
 
 ```bash
-openssl rand -base64 48                # Linux/Mac/Git Bash
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/jwt-privada.pem
+openssl pkey -in keys/jwt-privada.pem -pubout -out keys/jwt-publica.pem
 ```
 
-```powershell
-[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))   # Windows PowerShell
-```
+> **Importante:** el archivo de clave privada debe comenzar con `-----BEGIN PRIVATE KEY-----` (PKCS#8), no con `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1). El comando `genpkey` genera PKCS#8 directamente.
 
 ### Primer arranque (paso a paso)
 
@@ -130,14 +131,19 @@ openssl rand -base64 48                # Linux/Mac/Git Bash
    ```powershell
    $env:SPRING_DATASOURCE_USERNAME = "tu_usuario_bd"
    $env:SPRING_DATASOURCE_PASSWORD = "tu_password_bd"
-   $env:JWT_SECRET = "<valor generado arriba>"
    ```
 
    Linux/Mac/Git Bash:
    ```bash
    export SPRING_DATASOURCE_USERNAME=tu_usuario_bd
    export SPRING_DATASOURCE_PASSWORD=tu_password_bd
-   export JWT_SECRET="<valor generado arriba>"
+   ```
+
+   Generar las claves RSA (una sola vez por entorno):
+   ```bash
+   mkdir -p keys
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/jwt-privada.pem
+   openssl pkey -in keys/jwt-privada.pem -pubout -out keys/jwt-publica.pem
    ```
 4. Ejecutar:
    ```bash
@@ -156,7 +162,7 @@ Lista de verificacion antes de desplegar:
 
 - [ ] Base `db_scoring` accesible desde el servidor y usuario con permisos de creacion de tablas
 - [ ] `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` definidas
-- [ ] `JWT_SECRET` propio del entorno (misma que el Motor de Scoring)
+- [ ] Par de claves RSA generado en `keys/` (la clave publica copiada a Scoring API y Query API)
 - [ ] `CORS_ALLOWED_ORIGINS` con la URL real del frontend
 - [ ] Cambiar la contrasena del admin semilla (ver mas abajo)
 
@@ -164,11 +170,12 @@ Lista de verificacion antes de desplegar:
 
 | Sintoma | Causa | Solucion |
 |---|---|---|
-| Error de clave JWT / `WeakKeyException` / "key byte array is X bits" | `JWT_SECRET` vacia o menor a 32 caracteres | Definirla con 32+ caracteres |
+| Error de clave RSA / "Key is not in PEM-encoded PKCS#8 format" | Clave privada en formato PKCS#1 o ausente | Regenerar con `openssl genpkey` (ver "Par de claves RSA") |
 | `password authentication failed for user ...` | Usuario o contrasena de BD incorrectos, o variable sin definir | Revisar `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` |
 | `database "db_scoring" does not exist` | La base no esta creada | Crearla en PostgreSQL |
 | `Connection refused` a `localhost:5432` | PostgreSQL apagado o en otro host/puerto | Iniciar el servicio o ajustar `SPRING_DATASOURCE_URL` |
 | Las variables "no se toman" | Se definieron en otra terminal, o se uso `.env` esperando que Spring lo lea | Definirlas en la misma terminal/IDE donde se ejecuta |
+| "Failed to load ApplicationContext" / error de claves RSA al arrancar | Archivos `keys/jwt-privada.pem` o `jwt-publica.pem` no existen | Generar el par RSA (ver "Par de claves RSA") |
 | Error de compilacion de version Java | JDK distinto de 21 | Instalar y usar JDK 21 |
 | Puerto 8081 ocupado | Otro proceso lo usa | Cambiar `SERVER_PORT` |
 | Peticion con JSON invalido responde 401 en vez de 400 | `/error` protegido por Spring Security (error dispatch del contenedor) | Ya resuelto: `SecurityConfig` permite `/error`. Verificar con servidor real, no solo MockMvc |
@@ -195,7 +202,7 @@ docker run -p 8081:8081 \
   -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/db_scoring \
   -e SPRING_DATASOURCE_USERNAME=postgres \
   -e SPRING_DATASOURCE_PASSWORD=tu_password \
-  -e JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres-para-256-bits \
+  -v $(pwd)/keys:/app/keys:ro \
   crediticio-auth
 ```
 
@@ -272,6 +279,7 @@ Seed: `ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`.
 | Columna | Tipo | Restriccion |
 |---|---|---|
 | `id_usuario` | SERIAL | PK |
+| `uuid_publico` | UUID | UNIQUE NOT NULL, DEFAULT `gen_random_uuid()` |
 | `nombre` | VARCHAR(150) | NOT NULL |
 | `email` | VARCHAR(255) | UNIQUE NOT NULL |
 | `password_hash` | VARCHAR(255) | NOT NULL |
@@ -279,6 +287,8 @@ Seed: `ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`.
 | `activo` | BOOLEAN | DEFAULT TRUE |
 | `fecha_creacion` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 | `fecha_modificacion` | TIMESTAMP | Nullable |
+
+> `uuid_publico` es el identificador que va en el claim `sub` del JWT. El `id_usuario` SERIAL es interno y no se expone en tokens.
 
 ### Tablas de auditoria (Hibernate Envers)
 
@@ -302,6 +312,8 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 | `V105` | Seed del usuario administrador inicial (retirado por V106) |
 | `V106` | HU08: roles `ADMINISTRADOR_RIESGO`/`ANALISTA_CREDITO`, correo normalizado + indice unico `lower(email)`, columna `creado_por`, retiro del seed con credencial publica |
 | `V107` | HU09: tabla `refresh_tokens` (hash, familia de sesion, usado/revocado) |
+| `V108` | Indice en `refresh_tokens.usuario_id` para lookup por usuario |
+| `V109` | Columna `uuid_publico` UUID en `usuarios` (identificador publico para JWT RS256) |
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
 
@@ -352,12 +364,12 @@ Consulta no trivial con `LEFT JOIN`, `GROUP BY` y `FILTER` condicional.
 ## Flujo de autenticacion
 
 ```
- Frontend                         Auth Backend (este repo)           Motor de Scoring
+ Frontend                         Auth Backend (este repo)           Scoring / Query API
     │  POST /auth/login                  │
-    │ ─────────────────────────────────→ │  access token (15 min) + refresh token (7 dias)
+    │ ─────────────────────────────────→ │  access token RS256 (15 min) + refresh token (7 dias)
     │ ←───────────────────────────────── │
     │  Authorization: Bearer <access>    │
-    │ ─────────────────────────────────→ │ ─────────────────────────────→ valida iss/aud/firma
+    │ ─────────────────────────────────→ │ ─────────────────────────────→ valida con clave publica
     │  (access vencido)                  │
     │  POST /auth/refresh {refreshToken} │  invalida el refresh usado y emite uno nuevo
     │ ─────────────────────────────────→ │
@@ -370,16 +382,16 @@ Consulta no trivial con `LEFT JOIN`, `GROUP BY` y `FILTER` condicional.
 3. Al vencer el access token, `POST /auth/refresh` con el refresh token entrega un par nuevo. **Cada refresh token sirve una sola vez**: el anterior queda invalidado en la misma operacion.
 4. Si se presenta un refresh token que ya fue rotado, se asume robo: **toda la sesion (familia) se revoca** y hay que volver a iniciar sesion.
 5. `POST /auth/logout` invalida la sesion. El refresh token se guarda solo como hash SHA-256; nunca en claro.
-6. El Motor de Scoring valida el access token de forma autonoma (misma `JWT_SECRET`, `JWT_ISSUER` y `JWT_AUDIENCE`) o via `GET /auth/validate`.
+6. Scoring API y Query API validan el access token de forma autonoma con la clave publica RSA (validan `iss`, `aud` y firma RS256), o via `GET /auth/validate`.
 
-Claims del access token: `sub` (id de usuario), `email`, `rol`, `iss`, `aud`, `iat`, `exp`, `jti`. El rol efectivo siempre se toma de la BD, no del claim.
+Claims del access token: `sub` (UUID publico del usuario), `email`, `role`, `iss` (`crediticio-auth`), `aud` (`scoring-api`, `evaluation-query-api`), `iat`, `exp`, `jti`. El rol efectivo siempre se toma de la BD, no del claim.
 
 ## Seguridad
 
 ### Medidas implementadas
 
 - **Contrasenas:** hash BCrypt, nunca en texto plano. `password_hash` nunca se expone en respuestas.
-- **JWT:** firmado con HMAC-SHA (HS256/HS384/HS512 segun la longitud del secreto), clave externa de 32+ caracteres (validada al arrancar), access token de 15 minutos con `iss`/`aud`, rechazo de tokens vencidos, alterados o de otro emisor/audiencia.
+- **JWT:** firmado con **RS256** (criptografia asimetrica). La clave privada RSA firma los tokens (solo en este backend); la clave publica se distribuye a Scoring API y Query API para validacion local sin secreto compartido. Access token de 15 minutos con `iss`/`aud`, rechazo de tokens vencidos, alterados o de otro emisor/audiencia.
 - **Refresh tokens:** opacos, de un solo uso, guardados solo como hash, con rotacion atomica, deteccion de reutilizacion (revoca la sesion), logout y control de concurrencia.
 - **Login:** respuesta unica 401 ante cualquier fallo y comparacion de hash incluso si el usuario no existe (no revela existencia por mensaje ni por tiempo).
 - **RBAC:** por endpoint en Spring Security. Politica "solo propio" para ANALISTA_CREDITO en perfil y contrasena.
@@ -412,13 +424,13 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 |---|---|---|---|
 | `UserServiceTest` | Unitario | 18 | createUser (normalizacion, rol permitido, carrera), getAllUsers, getUserById, toggleStatus, changePassword |
 | `AuthServiceTest` | Unitario | 19 | login, refresh (rotacion, reutilizacion, vencido, inactivo, carrera), logout, validate |
-| `JwtTokenProviderTest` | Unitario | 14 | claims, iss/aud, vencido, alterado, refresh opaco/hash, limites de configuracion |
+| `JwtTokenProviderTest` | Unitario | 12 | RS256 claims, iss/aud, vencido, alterado, rechazo HMAC, refresh opaco/hash, limites de configuracion |
 | `AdminBootstrapRunnerTest` | Unitario | 4 | Primer administrador por variables de entorno |
 | `HttpErrorHandlingIntegrationTest` | Integracion (servidor HTTP real) | 12 | Errores de entrada 400 (JSON mal formado, tipos), UTF-8 en 401/403, `idRol` inexistente, refresh invalido 401 |
 | `AuthFlowIntegrationTest` | Integracion | 44 | Login, CRUD, RBAC, cambio contrasena, refresh/logout, concurrencia, usuarios desactivados |
 | `AuthApplicationTests` | Contexto | 1 | Spring Boot context loads |
 
-**Total: 112 tests** (verificado con `mvnw clean test` en JDK 21).
+**Total: 110 tests** (verificado con `mvnw clean test` en JDK 21).
 
 ## Decisiones arquitectonicas (ADR)
 
@@ -432,8 +444,9 @@ Documentado en [`docs/SECURITY_OWASP.md`](docs/SECURITY_OWASP.md). Cubre las 10 
 
 GitHub Actions (`.github/workflows/ci.yml`): en cada push/PR a `main` ejecuta tests, construye el JAR y lo sube como artefacto con retencion de 7 dias.
 
-## Coordinacion con el Motor de Scoring
+## Coordinacion con Scoring API y Query API
 
-- Comparten la misma BD (`db_scoring`) pero **no se llaman entre si directamente**.
+- Los tres backends comparten la misma BD (`db_scoring`) pero **no se llaman entre si directamente** (excepto Scoring → Query con token de servicio).
 - Cada backend gestiona sus propias tablas con rangos de migracion Flyway diferenciados.
-- El frontend orquesta las peticiones a ambos backends.
+- El frontend orquesta las peticiones a los tres backends.
+- **Distribucion de la clave publica:** la clave `jwt-publica.pem` generada por auth debe copiarse a Scoring API y Query API para que validen tokens RS256 de forma autonoma.

@@ -2,6 +2,21 @@
 
 Bitacora de ajustes necesarios para ejecutar el backend de autenticacion contra la base compartida `db_scoring`. Cada entrada indica sintoma, causa, solucion y como verificar. Todo ajuste de configuracion nuevo debe agregarse aqui.
 
+## 2026-10-22 — Migracion de HMAC a RS256 y alineacion de claims
+
+Rama `feat/F6.4-seguridad-sobre-main`. Resuelve las 4 incompatibilidades JWT entre auth-api y scoring-api/evaluation-query-api.
+
+- **Algoritmo:** HMAC/HS256 → **RS256** (criptografia asimetrica). Se elimina `JWT_SECRET`; nuevas variables `JWT_PRIVATE_KEY_LOCATION` y `JWT_PUBLIC_KEY_LOCATION` apuntan a archivos PEM (PKCS#8).
+- **Subject:** `sub` pasa de `Long` (id de usuario) a **UUID** (`uuid_publico`). Nueva migracion V109 agrega la columna.
+- **Claim de rol:** `"rol"` → `"role"` (alineado con scoring-api y query-api).
+- **Audiencia:** `JWT_AUDIENCE` (singular, valor `crediticio-scoring`) → `JWT_AUDIENCES` (plural, valor `scoring-api,evaluation-query-api`).
+- **Migraciones:** V108 (indice en `refresh_tokens.usuario_id`), V109 (`uuid_publico` UUID en `usuarios`).
+- **Distribucion de clave:** copiar `keys/jwt-publica.pem` a scoring-api y query-api. **No se comparte la clave privada.**
+- **Efecto:** todos los access tokens emitidos antes del despliegue dejan de ser validos (cambio de algoritmo y claims). El frontend no necesita cambios (el token es opaco para el).
+- **Verificacion:** `mvnw clean test` en JDK 21: 110 pruebas, 0 fallos.
+
+---
+
 ## 2026-10-14 — Correccion de errores HTTP y codificacion (revalidacion HU08/HU09)
 
 Rama `fix/HU08-HU09-errores-http-y-codificacion`. Hallazgos en `docs/REVALIDACION_HU08_HU09.md`.
