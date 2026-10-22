@@ -39,5 +39,9 @@ build/
 .env
 *.env.local
 
+### Keys ###
+keys/
+*.pem
+
 ### Logs ###
 *.log

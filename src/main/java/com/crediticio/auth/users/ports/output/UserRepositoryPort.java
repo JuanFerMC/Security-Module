@@ -4,12 +4,15 @@ import com.crediticio.auth.users.domain.Usuario;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface UserRepositoryPort {
 
     Usuario save(Usuario usuario);
 
     Optional<Usuario> findById(Long id);
+
+    Optional<Usuario> findByUuidPublico(UUID uuidPublico);
 
     Optional<Usuario> findByEmail(String email);
 

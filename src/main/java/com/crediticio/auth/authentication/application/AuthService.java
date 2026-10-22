@@ -141,8 +141,8 @@ public class AuthService implements AuthInputPort {
             throw new InvalidCredentialsException(TOKEN_INVALIDO);
         }
 
-        Long userId = tokenProvider.getUserIdFromToken(accessToken);
-        Usuario usuario = userRepository.findById(userId)
+        UUID uuid = tokenProvider.getUuidFromToken(accessToken);
+        Usuario usuario = userRepository.findByUuidPublico(uuid)
                 .filter(Usuario::isActivo)
                 .orElseThrow(() -> new InvalidCredentialsException(TOKEN_INVALIDO));
 
@@ -163,7 +163,7 @@ public class AuthService implements AuthInputPort {
 
     private LoginResponse emitirSesion(Usuario usuario, UUID familiaId) {
         String accessToken = tokenProvider.generateToken(
-                usuario.getId(), usuario.getEmail(), usuario.getRol().getNombre());
+                usuario.getUuidPublico(), usuario.getEmail(), usuario.getRol().getNombre());
 
         String refreshPlano = tokenProvider.generateRefreshToken();
         LocalDateTime ahora = LocalDateTime.now(ZoneOffset.UTC);

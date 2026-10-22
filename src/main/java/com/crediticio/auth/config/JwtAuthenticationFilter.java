@@ -18,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -34,10 +35,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (token != null && tokenProvider.isTokenValid(token)) {
-            Long userId = tokenProvider.getUserIdFromToken(token);
+            UUID uuid = tokenProvider.getUuidFromToken(token);
 
-            // Identidad y rol se toman de la BD, nunca de claims del token (HU09 RF15).
-            Optional<Usuario> usuario = userRepository.findById(userId);
+            Optional<Usuario> usuario = userRepository.findByUuidPublico(uuid);
             if (usuario.isPresent() && usuario.get().isActivo()) {
                 String rol = usuario.get().getRol().getNombre();
 

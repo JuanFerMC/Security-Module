@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -27,6 +28,11 @@ public class UsuarioJpaAdapter implements UserRepositoryPort {
     @Override
     public Optional<Usuario> findById(Long id) {
         return usuarioJpaRepository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<Usuario> findByUuidPublico(UUID uuidPublico) {
+        return usuarioJpaRepository.findByUuidPublico(uuidPublico).map(this::toDomain);
     }
 
     @Override
@@ -54,6 +60,7 @@ public class UsuarioJpaAdapter implements UserRepositoryPort {
     private Usuario toDomain(UsuarioJpaEntity entity) {
         return Usuario.builder()
                 .id(entity.getId())
+                .uuidPublico(entity.getUuidPublico())
                 .nombre(entity.getNombre())
                 .email(entity.getEmail())
                 .passwordHash(entity.getPasswordHash())

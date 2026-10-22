@@ -4,35 +4,40 @@ import com.crediticio.auth.authentication.ports.output.TokenProviderPort;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 
 @Component
 public class JwtTokenProvider implements TokenProviderPort {
 
-    /** HU09 RNF02: el access token no puede superar 15 minutos. */
     static final long MAX_ACCESS_EXPIRATION_MS = 15L * 60 * 1000;
-    /** HU09 RF06/RNF02: el refresh token dura como maximo 7 dias. */
     static final long MAX_REFRESH_EXPIRATION_DAYS = 7;
-    /** HS256 requiere al menos 256 bits. */
-    static final int MIN_SECRET_BYTES = 32;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    @Value("${app.jwt.secret}")
-    private String jwtSecret;
+    @Value("${app.jwt.private-key}")
+    private Resource privateKeyResource;
+
+    @Value("${app.jwt.public-key}")
+    private Resource publicKeyResource;
 
     @Value("${app.jwt.access-expiration-ms}")
     private long accessExpirationMs;
@@ -43,16 +48,22 @@ public class JwtTokenProvider implements TokenProviderPort {
     @Value("${app.jwt.issuer}")
     private String issuer;
 
-    @Value("${app.jwt.audience}")
-    private String audience;
+    @Value("${app.jwt.audiences}")
+    private List<String> audiences;
 
-    /** Falla el arranque si la configuracion criptografica o de vigencia es insegura (HU09 RNF01/RNF02). */
+    private RSAPrivateKey privateKey;
+    private RSAPublicKey publicKey;
+
     @PostConstruct
     void validateConfiguration() {
-        if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
-            throw new IllegalStateException(
-                    "JWT_SECRET es obligatoria y debe tener al menos " + MIN_SECRET_BYTES + " caracteres (256 bits)");
+        if (privateKeyResource == null || !privateKeyResource.exists()) {
+            throw new IllegalStateException("La clave privada RSA es obligatoria (app.jwt.private-key)");
         }
+        if (publicKeyResource == null || !publicKeyResource.exists()) {
+            throw new IllegalStateException("La clave pública RSA es obligatoria (app.jwt.public-key)");
+        }
+        this.privateKey = leerClavePrivada(privateKeyResource);
+        this.publicKey = leerClavePublica(publicKeyResource);
         if (accessExpirationMs <= 0 || accessExpirationMs > MAX_ACCESS_EXPIRATION_MS) {
             throw new IllegalStateException(
                     "JWT_EXPIRATION_MS debe estar entre 1 y " + MAX_ACCESS_EXPIRATION_MS + " (15 minutos)");
@@ -61,30 +72,35 @@ public class JwtTokenProvider implements TokenProviderPort {
             throw new IllegalStateException(
                     "JWT_REFRESH_EXPIRATION_DAYS debe estar entre 1 y " + MAX_REFRESH_EXPIRATION_DAYS);
         }
-        if (issuer == null || issuer.isBlank() || audience == null || audience.isBlank()) {
-            throw new IllegalStateException("JWT_ISSUER y JWT_AUDIENCE no pueden estar vacios");
+        if (issuer == null || issuer.isBlank()) {
+            throw new IllegalStateException("JWT_ISSUER no puede estar vacío");
+        }
+        if (audiences == null || audiences.isEmpty()) {
+            throw new IllegalStateException("JWT_AUDIENCES no puede estar vacío");
         }
     }
 
     @Override
-    public String generateToken(Long userId, String email, String rol) {
+    public String generateToken(UUID uuidPublico, String email, String rol) {
         Date now = new Date();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
-                .subject(String.valueOf(userId))
+                .subject(uuidPublico.toString())
                 .issuer(issuer)
-                .audience().add(audience).and()
                 .claim("email", email)
-                .claim("rol", rol)
+                .claim("role", rol)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessExpirationMs))
-                .signWith(getSigningKey())
-                .compact();
+                .signWith(privateKey, Jwts.SIG.RS256);
+        for (String aud : audiences) {
+            builder.audience().add(aud);
+        }
+        return builder.compact();
     }
 
     @Override
-    public Long getUserIdFromToken(String token) {
-        return Long.valueOf(getClaims(token).getSubject());
+    public UUID getUuidFromToken(String token) {
+        return UUID.fromString(getClaims(token).getSubject());
     }
 
     @Override
@@ -94,13 +110,13 @@ public class JwtTokenProvider implements TokenProviderPort {
 
     @Override
     public String getRolFromToken(String token) {
-        return getClaims(token).get("rol", String.class);
+        return getClaims(token).get("role", String.class);
     }
 
     @Override
     public boolean isTokenValid(String token) {
         try {
-            Long.valueOf(getClaims(token).getSubject());
+            UUID.fromString(getClaims(token).getSubject());
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
@@ -136,15 +152,26 @@ public class JwtTokenProvider implements TokenProviderPort {
 
     private Claims getClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(publicKey)
                 .requireIssuer(issuer)
-                .requireAudience(audience)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    private static RSAPrivateKey leerClavePrivada(Resource recurso) {
+        try (InputStream entrada = recurso.getInputStream()) {
+            return RsaKeyConverters.pkcs8().convert(entrada);
+        } catch (IOException ex) {
+            throw new UncheckedIOException("No fue posible leer la clave privada RSA", ex);
+        }
+    }
+
+    private static RSAPublicKey leerClavePublica(Resource recurso) {
+        try (InputStream entrada = recurso.getInputStream()) {
+            return RsaKeyConverters.x509().convert(entrada);
+        } catch (IOException ex) {
+            throw new UncheckedIOException("No fue posible leer la clave pública RSA", ex);
+        }
     }
 }
