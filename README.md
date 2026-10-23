@@ -295,10 +295,10 @@ Seed: `ADMINISTRADOR_RIESGO`, `ANALISTA_CREDITO`.
 | Tabla | Proposito |
 |---|---|
 | `revinfo` | Registro de cada revision (timestamp + usuario que hizo el cambio) |
-| `usuarios_aud` | Historial de cambios en `usuarios` (INSERT/UPDATE/DELETE) |
+| `usuarios_aud` | Historial de cambios en `usuarios` (INSERT/UPDATE/DELETE), incluido `uuid_publico` desde V111 |
 | `roles_aud` | Historial de cambios en `roles` |
 
-Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` correspondiente con el tipo de operacion (0=INSERT, 1=UPDATE, 2=DELETE) y una copia de todos los campos en ese momento.
+Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` correspondiente con el tipo de operacion (0=INSERT, 1=UPDATE, 2=DELETE) y una copia de los campos auditados en ese momento. `usuarios_aud.uuid_publico` acepta NULL para revisiones historicas anteriores a V109; las nuevas revisiones guardan el UUID.
 
 ### Migraciones Flyway
 
@@ -314,6 +314,8 @@ Cada operacion de escritura genera automaticamente una fila en la tabla `_aud` c
 | `V107` | HU09: tabla `refresh_tokens` (hash, familia de sesion, usado/revocado) |
 | `V108` | Indice en `refresh_tokens.usuario_id` para lookup por usuario |
 | `V109` | Columna `uuid_publico` UUID en `usuarios` (identificador publico para JWT RS256) |
+| `V110` | Corrige `password_reset_tokens.id` y su secuencia a BIGINT para coincidir con la entidad JPA |
+| `V111` | Agrega `uuid_publico` a `usuarios_aud` para que Envers audite la propiedad y Hibernate valide el esquema |
 
 Prefijo `V100+` para no colisionar con las migraciones del Motor de Scoring (`V1-V99`).
 

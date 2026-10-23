@@ -2,6 +2,14 @@
 
 Bitacora de ajustes necesarios para ejecutar el backend de autenticacion contra la base compartida `db_scoring`. Cada entrada indica sintoma, causa, solucion y como verificar. Todo ajuste de configuracion nuevo debe agregarse aqui.
 
+## 2026-10-23 — Alinear el esquema de auditoria con el UUID publico
+
+- **Sintoma:** Auth termina el arranque con `Schema-validation: missing column [uuid_publico] in table [usuarios_aud]`, aunque Flyway haya aplicado las migraciones pendientes.
+- **Causa:** V109 agrego `uuid_publico` a `usuarios`, pero la propiedad `uuidPublico` pertenece a `UsuarioJpaEntity`, que esta anotada con `@Audited`; Envers tambien requiere la columna en `usuarios_aud`.
+- **Cambio:** V111 agrega `usuarios_aud.uuid_publico UUID` nullable. Las revisiones anteriores a V109 conservan NULL porque ese dato no existia cuando se generaron; las revisiones nuevas registran el UUID.
+- **Despliegue:** ejecutar V111 mediante el arranque normal de Auth con Flyway habilitado y permisos de migracion, o mediante el procedimiento controlado del entorno. No editar V103 ni V109 una vez aplicadas.
+- **Verificacion:** confirmar que Flyway registra V111 y que Auth supera `ddl-auto: validate`; luego crear o actualizar un usuario de prueba y comprobar que la nueva revision contiene `uuid_publico`.
+
 ## 2026-10-22 — Migracion de HMAC a RS256 y alineacion de claims
 
 Rama `feat/F6.4-seguridad-sobre-main`. Resuelve las 4 incompatibilidades JWT entre auth-api y scoring-api/evaluation-query-api.
