@@ -39,9 +39,12 @@ build/
 .env
 *.env.local
 
-### Keys ###
-keys/
+### Keys (produccion y desarrollo — nunca se versionan) ###
+/keys/
 *.pem
+### Keys de test (se versionan: son solo para pruebas) ###
+!src/test/resources/keys/
+!src/test/resources/keys/*.pem
 
 ### Logs ###
 *.log
