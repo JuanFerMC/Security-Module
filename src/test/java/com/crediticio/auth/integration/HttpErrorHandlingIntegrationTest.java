@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
+
+import com.crediticio.auth.TestRsaKeyInitializer;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.datasource.url=jdbc:h2:mem:errtestdb;DB_CLOSE_DELAY=-1")
 @ActiveProfiles("test")
+@ContextConfiguration(initializers = TestRsaKeyInitializer.class)
 class HttpErrorHandlingIntegrationTest {
 
     private static final String PASSWORD = "claveSegura2026!";
