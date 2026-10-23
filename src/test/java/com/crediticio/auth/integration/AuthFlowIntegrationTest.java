@@ -15,7 +15,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.crediticio.auth.TestRsaKeyInitializer;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -24,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
+@ContextConfiguration(initializers = TestRsaKeyInitializer.class)
 class AuthFlowIntegrationTest {
 
     @Autowired
@@ -636,7 +640,8 @@ class AuthFlowIntegrationTest {
         void accessToken_withWrongIssuer_isRejected() throws Exception {
             java.util.UUID adminUuid = usuarioRepository.findByEmail("admin@test.com").get().getUuidPublico();
             java.security.interfaces.RSAPrivateKey pk;
-            try (java.io.InputStream in = new org.springframework.core.io.ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+            try (java.io.InputStream in = new org.springframework.core.io.FileSystemResource(
+                    TestRsaKeyInitializer.getTempDir().resolve("jwt-privada-test.pem")).getInputStream()) {
                 pk = org.springframework.security.converter.RsaKeyConverters.pkcs8().convert(in);
             }
             String forged = io.jsonwebtoken.Jwts.builder()
@@ -656,7 +661,8 @@ class AuthFlowIntegrationTest {
         void accessToken_roleClaimIsNotTrusted() throws Exception {
             java.util.UUID analistaUuid = usuarioRepository.findByEmail("analista@test.com").get().getUuidPublico();
             java.security.interfaces.RSAPrivateKey pk;
-            try (java.io.InputStream in = new org.springframework.core.io.ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+            try (java.io.InputStream in = new org.springframework.core.io.FileSystemResource(
+                    TestRsaKeyInitializer.getTempDir().resolve("jwt-privada-test.pem")).getInputStream()) {
                 pk = org.springframework.security.converter.RsaKeyConverters.pkcs8().convert(in);
             }
             String forged = io.jsonwebtoken.Jwts.builder()

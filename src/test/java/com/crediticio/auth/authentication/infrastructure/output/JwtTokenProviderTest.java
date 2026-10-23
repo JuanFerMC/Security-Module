@@ -1,15 +1,17 @@
 package com.crediticio.auth.authentication.infrastructure.output;
 
+import com.crediticio.auth.TestRsaKeyInitializer;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Date;
@@ -26,13 +28,16 @@ class JwtTokenProviderTest {
     private static final List<String> AUDIENCES = List.of("scoring-api", "evaluation-query-api");
     private static RSAPrivateKey testPrivateKey;
     private static RSAPublicKey testPublicKey;
+    private static Path keyDir;
 
     @BeforeAll
-    static void loadKeys() throws Exception {
-        try (InputStream in = new ClassPathResource("keys/jwt-privada-test.pem").getInputStream()) {
+    static void generateKeys() throws Exception {
+        TestRsaKeyInitializer.ensureKeys();
+        keyDir = TestRsaKeyInitializer.getTempDir();
+        try (InputStream in = new FileSystemResource(keyDir.resolve("jwt-privada-test.pem")).getInputStream()) {
             testPrivateKey = RsaKeyConverters.pkcs8().convert(in);
         }
-        try (InputStream in = new ClassPathResource("keys/jwt-publica-test.pem").getInputStream()) {
+        try (InputStream in = new FileSystemResource(keyDir.resolve("jwt-publica-test.pem")).getInputStream()) {
             testPublicKey = RsaKeyConverters.x509().convert(in);
         }
     }
@@ -44,8 +49,10 @@ class JwtTokenProviderTest {
 
     private JwtTokenProvider provider(long accessMs, long refreshDays) {
         JwtTokenProvider p = new JwtTokenProvider();
-        ReflectionTestUtils.setField(p, "privateKeyResource", new ClassPathResource("keys/jwt-privada-test.pem"));
-        ReflectionTestUtils.setField(p, "publicKeyResource", new ClassPathResource("keys/jwt-publica-test.pem"));
+        ReflectionTestUtils.setField(p, "privateKeyResource",
+                new FileSystemResource(keyDir.resolve("jwt-privada-test.pem")));
+        ReflectionTestUtils.setField(p, "publicKeyResource",
+                new FileSystemResource(keyDir.resolve("jwt-publica-test.pem")));
         ReflectionTestUtils.setField(p, "accessExpirationMs", accessMs);
         ReflectionTestUtils.setField(p, "refreshExpirationDays", refreshDays);
         ReflectionTestUtils.setField(p, "issuer", ISSUER);

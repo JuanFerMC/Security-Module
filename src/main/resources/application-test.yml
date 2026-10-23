@@ -15,8 +15,9 @@ spring:
 
 app:
   jwt:
-    private-key: classpath:keys/jwt-privada-test.pem
-    public-key: classpath:keys/jwt-publica-test.pem
+    # Las rutas de las claves RSA se inyectan por TestRsaKeyInitializer (genera un par efimero en cada ejecucion).
+    private-key: file:/dev/null
+    public-key: file:/dev/null
     access-expiration-ms: 900000
     refresh-expiration-days: 7
     issuer: crediticio-auth
