@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $envFile = Join-Path $root '.env'
 if (-not (Test-Path -LiteralPath $envFile -PathType Leaf)) {
-    throw "No existe .env. Copia .env.example a .env, completa sus valores y vuelve a ejecutar .\run-local.ps1."
+    throw "No existe .env.example. Copia .env.example a .env, completa sus valores y vuelve a ejecutar .\run-local.ps1."
 }
 $previous = @{}
 $loaded = @()

@@ -12,7 +12,7 @@ Requisitos: JDK 21, PostgreSQL accesible y OpenSSL (solo para crear las claves s
    openssl pkey -in keys/jwt-privada.pem -pubout -out keys/jwt-publica.pem
    ```
 
-   La privada permanece aquí. Copia solo la pública a los repos de Scoring y Query y configura allí la ruta respectiva. El `iss` debe coincidir en las tres APIs; `aud` debe incluir `scoring-api,evaluation-query-api`.
+   La privada permanece aquí. En la distribución local con los tres repos como carpetas hermanas, Scoring y Query apuntan directamente a `../auth/keys/jwt-publica.pem`; si despliegas en hosts separados, distribuye solo la pública por un canal seguro y configura su ruta en cada entorno. El `iss` debe coincidir en las tres APIs; `aud` debe incluir `scoring-api,evaluation-query-api`.
 4. Ejecuta `.\run-local.ps1` desde cualquier ubicación. El script carga `.env` solo para el proceso de Maven y ejecuta `.\mvnw.cmd spring-boot:run`; al finalizar restaura las variables previas de la terminal.
 
 API Auth: `http://localhost:8081`. Para desarrollo, revisa el README antes de aplicar migraciones sobre una BD con datos existentes.
