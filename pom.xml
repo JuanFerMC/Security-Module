@@ -154,11 +154,7 @@
                     </excludes>
                 </configuration>
             </plugin>
-           
-            <!-- ================================================== -->
-            <!-- JACOCO - COBERTURA DE CÓDIGO                       -->
-            <!-- ================================================== -->
-
+        
             <plugin>
 
                 <groupId>org.jacoco</groupId>
@@ -167,10 +163,6 @@
 
                 <executions>
 
-                    <!--
-                        Activa el agente de JaCoCo antes
-                        de ejecutar las pruebas.
-                    -->
                     <execution>
 
                         <id>prepare-agent</id>
@@ -181,11 +173,6 @@
 
                     </execution>
 
-
-                    <!--
-                        Genera el informe de cobertura
-                        después de ejecutar las pruebas.
-                    -->
                     <execution>
 
                         <id>report</id>
