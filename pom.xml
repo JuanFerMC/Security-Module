@@ -154,6 +154,78 @@
                     </excludes>
                 </configuration>
             </plugin>
+           
+            <!-- ================================================== -->
+            <!-- JACOCO - COBERTURA DE CÓDIGO                       -->
+            <!-- ================================================== -->
+
+            <plugin>
+
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+
+                <executions>
+
+                    <!--
+                        Activa el agente de JaCoCo antes
+                        de ejecutar las pruebas.
+                    -->
+                    <execution>
+
+                        <id>prepare-agent</id>
+
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+
+                    </execution>
+
+
+                    <!--
+                        Genera el informe de cobertura
+                        después de ejecutar las pruebas.
+                    -->
+                    <execution>
+
+                        <id>report</id>
+
+                        <phase>verify</phase>
+
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+
+                    </execution>
+
+                </executions>
+
+            </plugin>
+             <plugin>
+
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>10.0.3</version>
+
+                <configuration>
+
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+
+                    <formats>
+
+                        <format>HTML</format>
+
+                        <format>JSON</format>
+
+                    </formats>
+
+                </configuration>
+
+            </plugin>
+
+        </plugins>
+
+    </build>
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
@@ -168,5 +240,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>
