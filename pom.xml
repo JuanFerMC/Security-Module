@@ -1,3 +1,4 @@
+
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -154,41 +155,30 @@
                     </excludes>
                 </configuration>
             </plugin>
-        
-            <plugin>
 
+            <!-- JaCoCo: medición de cobertura de pruebas unitarias -->
+            <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.13</version>
-
                 <executions>
-
                     <execution>
-
                         <id>prepare-agent</id>
-
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
-
                     </execution>
 
                     <execution>
-
                         <id>report</id>
-
-                        <phase>verify</phase>
-
+                        <phase>test</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>
-
                     </execution>
-
                 </executions>
-
             </plugin>
-            
+
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
