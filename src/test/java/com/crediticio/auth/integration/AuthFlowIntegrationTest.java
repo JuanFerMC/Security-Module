@@ -121,7 +121,7 @@ class AuthFlowIntegrationTest {
         void login_doesNotIssueAuthenticationCookieOrHttpSession() throws Exception {
             mockMvc.perform(post("/api/v1/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\\"email\\":\\"admin@test.com\\",\\"password\\":\\"admin123\\"}"))
+                            .content("{\"email\":\"admin@test.com\",\"password\":\"admin123\"}"))
                     .andExpect(status().isOk())
                     .andExpect(header().doesNotExist("Set-Cookie"))
                     .andExpect(cookie().doesNotExist("JSESSIONID"));
