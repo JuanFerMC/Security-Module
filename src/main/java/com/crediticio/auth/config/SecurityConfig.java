@@ -29,9 +29,14 @@ public class SecurityConfig {
     private final ObjectMapper objectMapper;
 
     @Bean
+    @SuppressWarnings("java:S4502")
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(Customizer.withDefaults())
+                // CSRF desactivado intencionalmente: API stateless que autentica
+                // exclusivamente con JWT explícito en Authorization: Bearer.
+                // No se utilizan cookies ni sesiones como credenciales; los refresh
+                // tokens se reciben en el cuerpo JSON de refresh/logout.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
