@@ -106,6 +106,36 @@ class AuthFlowIntegrationTest {
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}"));
     }
 
+
+    @Nested
+    class StatelessSecurityTransportTests {
+
+        @Test
+        void protectedEndpoint_cookieWithoutBearer_returns401() throws Exception {
+            mockMvc.perform(get("/api/v1/auth/validate")
+                            .cookie(new jakarta.servlet.http.Cookie("access_token", "fake-jwt")))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void login_doesNotIssueAuthenticationCookieOrHttpSession() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\\"email\\":\\"admin@test.com\\",\\"password\\":\\"admin123\\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().doesNotExist("Set-Cookie"))
+                    .andExpect(cookie().doesNotExist("JSESSIONID"));
+        }
+
+        @Test
+        void corsDoesNotAllowCredentialedCookieRequests() throws Exception {
+            mockMvc.perform(options("/api/v1/auth/login")
+                            .header("Origin", "https://credit-compass.example")
+                            .header("Access-Control-Request-Method", "POST"))
+                    .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+        }
+    }
+
     @Nested
     class LoginTests {
 
