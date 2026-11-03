@@ -1,10 +1,6 @@
-name: CodeQL
+name: CodeQL scheduled scan
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '23 5 * * 1'
   workflow_dispatch:
@@ -15,8 +11,8 @@ permissions:
   security-events: write
 
 concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: codeql-scheduled-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   analyze:
