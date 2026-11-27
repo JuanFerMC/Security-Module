@@ -1,7 +1,7 @@
 # API Reference — crediticio.auth
 
 **Base URL:** `http://localhost:8081/api/v1`  
-**Swagger UI:** `http://localhost:8081/swagger-ui.html`  
+**Swagger UI:** `http://localhost:8081/swagger-ui.html` (solo con el perfil `dev`)  
 **Content-Type:** `application/json`  
 **Autenticacion:** JWT Bearer token en header `Authorization`
 
@@ -462,7 +462,7 @@ Todas las respuestas de error usan el mismo formato:
 | `errorCode` | string | Si | Codigo de error para logica condicional en el frontend |
 | `message` | string | Si | Mensaje legible para mostrar al usuario |
 | `details` | object | No | Solo en `VALIDATION_ERROR`. Mapa campo → mensaje de error |
-| `traceId` | string | Si | UUID para rastreo en logs del backend |
+| `traceId` | string | Si | UUID para rastreo en logs del backend. Es el valor del encabezado `X-Trace-Id` de la peticion si era un UUID valido; si no, uno generado. Se devuelve tambien en el encabezado `X-Trace-Id` de la respuesta |
 | `timestamp` | string | Si | ISO 8601 |
 
 ### Catalogo de codigos de error

@@ -79,10 +79,9 @@ Este documento analiza como el backend aborda cada categoria del OWASP Top 10 (2
 - `open-in-view: false` deshabilitado para evitar lazy loading fuera de transaccion.
 - `ddl-auto: validate` en produccion — el esquema solo cambia via Flyway.
 - Actuator expone solo `/health` como publico.
-- Swagger UI accesible sin autenticacion (solo en desarrollo; en produccion se recomienda restringir).
+- Swagger UI accesible sin autenticacion solo con el perfil `dev`; en cualquier otro perfil esta deshabilitado (`springdoc.*.enabled=false`).
 
 **Mitigaciones adicionales recomendadas:**
-- Deshabilitar Swagger UI en perfil `prod` (`springdoc.swagger-ui.enabled=false`).
 - Configurar headers de seguridad HTTP (X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security).
 
 ---

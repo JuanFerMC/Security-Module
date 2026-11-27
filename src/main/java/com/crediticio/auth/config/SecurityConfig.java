@@ -1,6 +1,7 @@
 package com.crediticio.auth.config;
 
 import com.crediticio.auth.shared.response.ApiError;
+import com.crediticio.auth.shared.util.TraceIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -13,8 +14,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import java.util.UUID;
 
 @Configuration
 @EnableWebSecurity
@@ -56,6 +55,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        // Metricas: solo la cuenta tecnica de Prometheus (MetricsSecurityConfiguration, cadena previa).
+                        // Ni siquiera un JWT de administrador las lee por esta cadena.
+                        .requestMatchers("/actuator/prometheus").denyAll()
                         // Actuator completo solo ADMINISTRADOR_RIESGO
                         .requestMatchers("/actuator/**").hasRole(ROL_ADMIN)
                         // Solo ADMINISTRADOR_RIESGO
@@ -78,7 +80,7 @@ public class SecurityConfig {
                             ApiError error = ApiError.builder()
                                     .errorCode("UNAUTHORIZED")
                                     .message("Autenticación requerida")
-                                    .traceId(UUID.randomUUID().toString())
+                                    .traceId(TraceIdFilter.traceIdActual())
                                     .build();
                             response.getWriter().write(objectMapper.writeValueAsString(error));
                         })
@@ -89,7 +91,7 @@ public class SecurityConfig {
                             ApiError error = ApiError.builder()
                                     .errorCode("ACCESS_DENIED")
                                     .message("No tiene permisos para acceder a este recurso")
-                                    .traceId(UUID.randomUUID().toString())
+                                    .traceId(TraceIdFilter.traceIdActual())
                                     .build();
                             response.getWriter().write(objectMapper.writeValueAsString(error));
                         })

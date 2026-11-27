@@ -1,5 +1,6 @@
 package com.crediticio.auth.config;
 
+import com.crediticio.auth.shared.util.TraceIdFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,9 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        // X-Trace-Id: contrato comun de trazabilidad con scoring-api y evaluation-query-api.
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", TraceIdFilter.TRACE_ID_HEADER));
+        config.setExposedHeaders(List.of(TraceIdFilter.TRACE_ID_HEADER));
         // No se usan cookies de autenticación; el cliente envía Bearer explícitamente.
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);

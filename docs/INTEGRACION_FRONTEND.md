@@ -11,7 +11,7 @@ Estado verificado contra la version `main` tras HU08, HU09 y la correccion de er
 | Dato | Valor |
 |---|---|
 | URL base (local) | `http://localhost:8081/api/v1` |
-| Swagger (para explorar y probar) | `http://localhost:8081/swagger-ui.html` |
+| Swagger (para explorar y probar) | `http://localhost:8081/swagger-ui.html` (solo con el perfil `dev`, `SPRING_PROFILES_ACTIVE=dev`) |
 | Origen permitido por CORS (por defecto) | `http://localhost:3000` (puerto del frontend) |
 | Formato | JSON, `Content-Type: application/json`, UTF-8 |
 
@@ -253,6 +253,8 @@ Toda respuesta de error tiene el mismo formato:
 ```
 
 `details` solo aparece en `VALIDATION_ERROR` y es un objeto `{ campo: mensaje }`. `traceId` sirve para pedir soporte.
+
+**Encabezado `X-Trace-Id`** (contrato comun con scoring-api y evaluation-query-api): el frontend puede enviar un UUID en `X-Trace-Id`; si no lo envia o no es un UUID valido, la API genera uno. Toda respuesta devuelve el encabezado `X-Trace-Id` (expuesto por CORS) y, en los errores, el mismo valor en `traceId`, que tambien aparece en los logs del backend.
 
 | HTTP | `errorCode` | Cuando | Que hacer en la UI |
 |---|---|---|---|

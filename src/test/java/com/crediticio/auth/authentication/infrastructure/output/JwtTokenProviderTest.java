@@ -11,9 +11,13 @@ import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -130,6 +134,54 @@ class JwtTokenProviderTest {
         String tampered = parts[0] + "." + parts[1] + "A." + parts[2];
 
         assertFalse(tokenProvider.isTokenValid(tampered));
+    }
+
+    // Fase 5: mismos ataques que ya cubren scoring-api y evaluation-query-api en su JwtConfigTest.
+
+    @Test
+    void isTokenValid_tokenSignedWithAnotherRsaKey_isRejected() throws Exception {
+        KeyPairGenerator generador = KeyPairGenerator.getInstance("RSA");
+        generador.initialize(2048);
+        KeyPair otraClave = generador.generateKeyPair();
+        String token = Jwts.builder()
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .audience().add("scoring-api").and()
+                .claim("role", "ADMINISTRADOR_RIESGO")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60000))
+                .signWith(otraClave.getPrivate())
+                .compact();
+
+        assertFalse(tokenProvider.isTokenValid(token));
+    }
+
+    @Test
+    void isTokenValid_unsignedAlgNoneToken_isRejected() {
+        // Sin signWith, jjwt emite un JWT no protegido: cabecera "alg":"none" y firma vacía.
+        String token = Jwts.builder()
+                .subject(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .audience().add("scoring-api").and()
+                .claim("role", "ADMINISTRADOR_RIESGO")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60000))
+                .compact();
+
+        assertTrue(token.endsWith("."), "el token de prueba debe llegar sin firma");
+        assertFalse(tokenProvider.isTokenValid(token));
+    }
+
+    @Test
+    void isTokenValid_roleEscalationKeepingTheOriginalSignature_isRejected() {
+        String token = tokenProvider.generateToken(UUID.randomUUID(), "analista@test.com", "ANALISTA_CREDITO");
+        String[] partes = token.split("\\.");
+        String payload = new String(Base64.getUrlDecoder().decode(partes[1]), StandardCharsets.UTF_8);
+        assertTrue(payload.contains("\"ANALISTA_CREDITO\""), payload);
+        String escalado = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                payload.replace("\"ANALISTA_CREDITO\"", "\"ADMINISTRADOR_RIESGO\"").getBytes(StandardCharsets.UTF_8));
+
+        assertFalse(tokenProvider.isTokenValid(partes[0] + "." + escalado + "." + partes[2]));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.crediticio.auth.config;
 
 import com.crediticio.auth.shared.response.ApiError;
+import com.crediticio.auth.shared.util.TraceIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,7 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -49,7 +49,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             ApiError error = ApiError.builder()
                     .errorCode("RATE_LIMIT_EXCEEDED")
                     .message("Demasiados intentos de login. Intente nuevamente en 15 minutos")
-                    .traceId(UUID.randomUUID().toString())
+                    .traceId(TraceIdFilter.traceIdActual())
                     .build();
             objectMapper.findAndRegisterModules();
             response.getWriter().write(objectMapper.writeValueAsString(error));

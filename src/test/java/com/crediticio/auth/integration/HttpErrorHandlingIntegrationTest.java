@@ -23,6 +23,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,6 +92,18 @@ class HttpErrorHandlingIntegrationTest {
                 ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
         return client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private HttpResponse<byte[]> sendWithHeaders(String method, String path, Map<String, String> headers)
+            throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+        headers.forEach(builder::header);
+        builder.method(method, HttpRequest.BodyPublishers.noBody());
+        return client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private String header(HttpResponse<byte[]> r, String nombre) {
+        return r.headers().firstValue(nombre).orElse("");
     }
 
     private String accessToken(String email) throws Exception {
@@ -209,5 +223,81 @@ class HttpErrorHandlingIntegrationTest {
 
         assertEquals(204, send("POST", "/api/v1/auth/logout", "{\"refreshToken\":\"" + largo + "\"}", null).statusCode());
         assertEquals(204, send("POST", "/api/v1/auth/logout", "{}", null).statusCode());
+    }
+
+    // ---------- Fase 2: contrato comun X-Trace-Id ----------
+
+    @Test
+    void unauthorized_reusesValidTraceId_inHeaderAndBody() throws Exception {
+        String traceId = UUID.randomUUID().toString();
+
+        HttpResponse<byte[]> r = sendWithHeaders("GET", "/api/v1/usuarios", Map.of("X-Trace-Id", traceId));
+
+        assertEquals(401, r.statusCode());
+        assertEquals(traceId, header(r, "X-Trace-Id"));
+        assertEquals(traceId, json(r).get("traceId").asText());
+    }
+
+    @Test
+    void forbidden_withoutTraceId_generatesOneMatchingTheBody() throws Exception {
+        HttpResponse<byte[]> r = send("GET", "/api/v1/usuarios", null, accessToken("analista@test.com"));
+
+        assertEquals(403, r.statusCode());
+        String traceId = header(r, "X-Trace-Id");
+        UUID.fromString(traceId);
+        assertEquals(traceId, json(r).get("traceId").asText());
+    }
+
+    @Test
+    void validationError_usesRequestTraceId() throws Exception {
+        String traceId = UUID.randomUUID().toString();
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/login"))
+                .header("Content-Type", "application/json")
+                .header("X-Trace-Id", traceId)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"email\": ", StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<byte[]> r = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        assertEquals(400, r.statusCode());
+        assertEquals(traceId, header(r, "X-Trace-Id"));
+        assertEquals(traceId, json(r).get("traceId").asText());
+    }
+
+    @Test
+    void corsPreflight_allowsTraceIdHeader() throws Exception {
+        HttpResponse<byte[]> r = sendWithHeaders("OPTIONS", "/api/v1/auth/login", Map.of(
+                "Origin", "http://localhost:3000",
+                "Access-Control-Request-Method", "POST",
+                "Access-Control-Request-Headers", "content-type,x-trace-id"));
+
+        assertEquals(200, r.statusCode());
+        assertTrue(header(r, "Access-Control-Allow-Headers").toLowerCase().contains("x-trace-id"),
+                "Access-Control-Allow-Headers: " + header(r, "Access-Control-Allow-Headers"));
+    }
+
+    @Test
+    void corsResponse_exposesTraceIdHeader() throws Exception {
+        HttpResponse<byte[]> r = sendWithHeaders("GET", "/api/v1/usuarios", Map.of("Origin", "http://localhost:3000"));
+
+        assertEquals(401, r.statusCode());
+        assertTrue(header(r, "Access-Control-Expose-Headers").toLowerCase().contains("x-trace-id"),
+                "Access-Control-Expose-Headers: " + header(r, "Access-Control-Expose-Headers"));
+    }
+
+    // ---------- Fase 2: Swagger deshabilitado fuera del perfil dev ----------
+
+    @Test
+    void swagger_isDisabledOutsideDevProfile() throws Exception {
+        assertEquals(404, sendWithHeaders("GET", "/v3/api-docs", Map.of()).statusCode());
+        assertEquals(404, sendWithHeaders("GET", "/swagger-ui.html", Map.of()).statusCode());
+    }
+
+    // ---------- Fase 4: /actuator/prometheus con las métricas apagadas (configuración por defecto) ----------
+
+    @Test
+    void prometheus_withMetricsDisabled_isDeniedEvenToAdminJwt() throws Exception {
+        assertEquals(401, send("GET", "/actuator/prometheus", null, null).statusCode());
+        assertEquals(403, send("GET", "/actuator/prometheus", null, accessToken("admin@test.com")).statusCode());
     }
 }
