@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- Perfil por defecto (dev): consola legible para humanos -->
-    <springProfile name="default">
+    <!-- Perfil por defecto y perfil dev: consola legible para humanos. traceId = encabezado X-Trace-Id
+         (TraceIdFilter); en prod el encoder JSON ya incluye los campos MDC. -->
+    <springProfile name="default | (dev &amp; !test)">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n</pattern>
             </encoder>
         </appender>
         <root level="INFO">

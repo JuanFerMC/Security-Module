@@ -1,6 +1,7 @@
 package com.crediticio.auth.shared.exception;
 
 import com.crediticio.auth.shared.response.ApiError;
+import com.crediticio.auth.shared.util.TraceIdFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +16,6 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestControllerAdvice
@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
                 .errorCode("VALIDATION_ERROR")
                 .message("Error de validación en los datos de entrada")
                 .details(details)
-                .traceId(UUID.randomUUID().toString())
+                .traceId(TraceIdFilter.traceIdActual())
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(apiError);
@@ -112,7 +112,7 @@ public class GlobalExceptionHandler {
         ApiError apiError = ApiError.builder()
                 .errorCode(errorCode)
                 .message(message)
-                .traceId(UUID.randomUUID().toString())
+                .traceId(TraceIdFilter.traceIdActual())
                 .build();
         return ResponseEntity.status(status).body(apiError);
     }

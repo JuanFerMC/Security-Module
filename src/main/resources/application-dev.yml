@@ -1,0 +1,8 @@
+# Perfil de desarrollo local. Activar con SPRING_PROFILES_ACTIVE=dev
+# (o ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev).
+# Solo habilita la documentacion interactiva; no cambia seguridad, base de datos ni JWT.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

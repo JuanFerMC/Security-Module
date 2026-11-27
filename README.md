@@ -150,7 +150,7 @@ openssl pkey -in keys/jwt-privada.pem -pubout -out keys/jwt-publica.pem
    ./mvnw spring-boot:run        # Linux/Mac/Git Bash
    .\mvnw.cmd spring-boot:run    # Windows
    ```
-5. Verificar: `http://localhost:8081/actuator/health` debe responder `UP` y `http://localhost:8081/swagger-ui.html` muestra la API.
+5. Verificar: `http://localhost:8081/actuator/health` debe responder `UP`. Con el perfil `dev` (`SPRING_PROFILES_ACTIVE=dev` o `-Dspring-boot.run.profiles=dev`), `http://localhost:8081/swagger-ui.html` muestra la API.
 
 La aplicacion arranca en `http://localhost:8081`. Flyway ejecuta las migraciones `V100+` automaticamente al iniciar; en una base compartida con el Motor de Scoring conviven con sus migraciones `V1-V99`.
 
@@ -210,7 +210,7 @@ El Dockerfile usa multi-stage build (JDK 21 para compilar, JRE 21 Alpine para ej
 
 ### Swagger UI
 
-Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer para autenticacion con JWT. Cada endpoint esta documentado con `@Operation`, `@ApiResponse` y `@Schema` en los DTOs.
+Solo con el perfil `dev` (`SPRING_PROFILES_ACTIVE=dev`); en cualquier otro perfil, incluido produccion, esta deshabilitado. Disponible en `http://localhost:8081/swagger-ui.html` — incluye esquema Bearer para autenticacion con JWT. Cada endpoint esta documentado con `@Operation`, `@ApiResponse` y `@Schema` en los DTOs.
 
 > **Para el frontend:** la guia de integracion (flujo de sesion, renovacion de tokens, errores, roles y ejemplo de cliente) esta en [`docs/INTEGRACION_FRONTEND.md`](docs/INTEGRACION_FRONTEND.md).
 

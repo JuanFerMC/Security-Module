@@ -48,3 +48,27 @@ app:
     admin-nombre: ${INIT_ADMIN_NOMBRE:Administrador}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  # Cuenta tecnica de Prometheus (HTTP Basic, independiente de los JWT de usuario). Apagada por defecto: sin
+  # habilitarla, la cadena principal deniega /actuator/prometheus. Ver docs/METRICAS_PROMETHEUS.md.
+  metrics:
+    enabled: ${AUTH_METRICS_ENABLED:false}
+    username: ${AUTH_METRICS_USERNAME:}
+    password: ${AUTH_METRICS_PASSWORD:}
+
+# Actuator: health publico y sin detalles; prometheus solo con la cuenta tecnica (MetricsSecurityConfiguration).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+# Swagger/OpenAPI deshabilitado por defecto (mismo criterio que scoring-api y evaluation-query-api).
+# Se habilita solo con el perfil "dev" (application-dev.yml): SPRING_PROFILES_ACTIVE=dev.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
